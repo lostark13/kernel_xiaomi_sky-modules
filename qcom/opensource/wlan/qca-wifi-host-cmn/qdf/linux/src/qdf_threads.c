@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,6 +42,10 @@
 #include <linux/stacktrace.h>
 #include <qdf_defer.h>
 #include <qdf_module.h>
+
+/* Function declarations and documenation */
+
+typedef int (*qdf_thread_os_func)(void *data);
 
 /**
  *  qdf_sleep() - sleep
@@ -143,11 +146,11 @@ qdf_export_symbol(qdf_create_thread);
 
 static uint16_t qdf_thread_id;
 
-qdf_thread_t *qdf_thread_run(qdf_thread_os_func callback, void *context)
+qdf_thread_t *qdf_thread_run(qdf_thread_func callback, void *context)
 {
 	struct task_struct *thread;
 
-	thread = kthread_create(callback, context,
+	thread = kthread_create((qdf_thread_os_func)callback, context,
 				"qdf %u", qdf_thread_id++);
 	if (IS_ERR(thread))
 		return NULL;

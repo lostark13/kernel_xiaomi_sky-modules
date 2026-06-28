@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -250,8 +250,7 @@ static void pld_pcie_notify_handler(struct pci_dev *pdev, int state)
  *
  * Return: void
  */
-static void pld_pcie_uevent(struct pci_dev *pdev,
-			    enum cnss_driver_status status)
+static void pld_pcie_uevent(struct pci_dev *pdev, uint32_t status)
 {
 	struct pld_context *pld_context;
 	struct pld_uevent_data data = {0};
@@ -970,7 +969,7 @@ int pld_pcie_get_soc_info(struct device *dev, struct pld_soc_info *info)
 	info->board_id = cnss_info.board_id;
 	info->soc_id = cnss_info.soc_id;
 	info->fw_version = cnss_info.fw_version;
-	strscpy(info->fw_build_timestamp, cnss_info.fw_build_timestamp,
+	strlcpy(info->fw_build_timestamp, cnss_info.fw_build_timestamp,
 		sizeof(info->fw_build_timestamp));
 	info->device_version.family_number =
 		cnss_info.device_version.family_number;
@@ -984,7 +983,7 @@ int pld_pcie_get_soc_info(struct device *dev, struct pld_soc_info *info)
 		info->dev_mem_info[i].start = cnss_info.dev_mem_info[i].start;
 		info->dev_mem_info[i].size = cnss_info.dev_mem_info[i].size;
 	}
-	strscpy(info->fw_build_id, cnss_info.fw_build_id,
+	strlcpy(info->fw_build_id, cnss_info.fw_build_id,
 		sizeof(info->fw_build_id));
 
 	return 0;

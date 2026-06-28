@@ -227,7 +227,17 @@ QDF_STATUS
 ucfg_mlme_get_sta_keep_alive_period(struct wlan_objmgr_psoc *psoc,
 				    uint32_t *val)
 {
-	return wlan_mlme_get_sta_keep_alive_period(psoc, val);
+	struct wlan_mlme_psoc_ext_obj *mlme_obj;
+
+	mlme_obj = mlme_get_psoc_ext_obj(psoc);
+	if (!mlme_obj) {
+		*val = cfg_default(CFG_INFRA_STA_KEEP_ALIVE_PERIOD);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*val = mlme_obj->cfg.sta.sta_keep_alive_period;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS

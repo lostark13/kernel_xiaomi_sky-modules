@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -284,7 +284,9 @@ dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
  * @soc: core txrx main context
  * @ring_desc: opaque pointer to the REO error ring descriptor
  * @mpdu_desc_info: MPDU descriptor information from ring descriptor
- * @mac_id: mac ID
+ * @head: head of the local descriptor free-list
+ * @tail: tail of the local descriptor free-list
+ * @quota: No. of units (packets) that can be serviced in one shot.
  *
  * This function is used to drop all MSDU in an MPDU
  *
@@ -293,7 +295,8 @@ dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 static uint32_t
 dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 		 struct hal_rx_mpdu_desc_info *mpdu_desc_info,
-		 uint8_t *mac_id)
+		 uint8_t *mac_id,
+		 uint32_t quota)
 {
 	uint32_t rx_bufs_used = 0;
 	void *link_desc_va;
@@ -415,6 +418,7 @@ more_msdu_link_desc:
 
 		goto more_msdu_link_desc;
 	}
+	quota--;
 	dp_rx_link_desc_return_by_addr(soc, buf_addr_info,
 				       HAL_BM_ACTION_PUT_IN_IDLE_LIST);
 	return rx_bufs_used;
@@ -426,7 +430,9 @@ more_msdu_link_desc:
  * @soc: core txrx main context
  * @ring_desc: opaque pointer to the REO error ring descriptor
  * @mpdu_desc_info: MPDU descriptor information from ring descriptor
- * @mac_id: mac ID
+ * @head: head of the local descriptor free-list
+ * @tail: tail of the local descriptor free-list
+ * @quota: No. of units (packets) that can be serviced in one shot.
  *
  * This function implements PN error handling
  * If the peer is configured to ignore the PN check errors
@@ -439,7 +445,8 @@ more_msdu_link_desc:
 static uint32_t
 dp_rx_pn_error_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 		      struct hal_rx_mpdu_desc_info *mpdu_desc_info,
-		      uint8_t *mac_id)
+		      uint8_t *mac_id,
+		      uint32_t quota)
 {
 	uint16_t peer_id;
 	uint32_t rx_bufs_used = 0;
@@ -468,7 +475,7 @@ dp_rx_pn_error_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (!peer_pn_policy)
 		rx_bufs_used = dp_rx_msdus_drop(soc, ring_desc,
 						mpdu_desc_info,
-						mac_id);
+						mac_id, quota);
 
 	return rx_bufs_used;
 }
@@ -2309,7 +2316,7 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 			if (qdf_unlikely(num_msdus > 1)) {
 				count = dp_rx_msdus_drop(soc, ring_desc,
 							 &mpdu_desc_info,
-							 &mac_id);
+							 &mac_id, quota);
 				rx_bufs_reaped[mac_id] += count;
 				goto next_entry;
 			}
@@ -2366,8 +2373,8 @@ process_reo_error_code:
 				DP_STATS_INC(dp_pdev, err.reo_error, 1);
 			count = dp_rx_pn_error_handle(soc,
 						      ring_desc,
-						      &mpdu_desc_info,
-						      &mac_id);
+						      &mpdu_desc_info, &mac_id,
+						      quota);
 
 			rx_bufs_reaped[mac_id] += count;
 			break;
@@ -2400,7 +2407,7 @@ process_reo_error_code:
 			DP_STATS_INC(soc, rx.err.reo_error[error_code], 1);
 			count = dp_rx_msdus_drop(soc, ring_desc,
 						 &mpdu_desc_info,
-						 &mac_id);
+						 &mac_id, quota);
 			rx_bufs_reaped[mac_id] += count;
 			break;
 		default:

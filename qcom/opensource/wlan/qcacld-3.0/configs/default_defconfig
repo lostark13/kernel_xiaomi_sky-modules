@@ -234,7 +234,7 @@ endif
 
 ifneq ($(DEVELOPER_DISABLE_BUILD_TIMESTAMP), y)
 ifneq ($(WLAN_DISABLE_BUILD_TAG), y)
-CONFIG_BUILD_TAG := n
+CONFIG_BUILD_TAG := y
 endif
 endif
 
@@ -348,9 +348,7 @@ endif
 	CONFIG_DP_PKT_ADD_TIMESTAMP := y
 endif
 
-ifeq ($(CONFIG_CNSS2_DEBUG), y)
-	CONFIG_WLAN_POWER_DEBUG := y
-endif
+CONFIG_WLAN_POWER_DEBUG := y
 #Enable Beacon Reception Stats
 CONFIG_FEATURE_BECN_STATS := y
 endif

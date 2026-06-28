@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -415,15 +415,8 @@ static bool
 wlan_is_nan_allowed_on_6ghz_freq(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 {
 	QDF_STATUS status;
-	struct regulatory_channel *chan_list;
-	uint32_t len_6g =
-			NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel);
+	struct regulatory_channel chan_list[NUM_6GHZ_CHANNELS];
 	uint16_t i;
-	bool ret = false;
-
-	chan_list = qdf_mem_malloc(len_6g);
-	if (!chan_list)
-		return ret;
 
 	status = wlan_reg_get_6g_ap_master_chan_list(pdev,
 						     REG_VERY_LOW_POWER_AP,
@@ -431,15 +424,11 @@ wlan_is_nan_allowed_on_6ghz_freq(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 
 	for (i = 0; i < NUM_6GHZ_CHANNELS; i++) {
 		if ((freq == chan_list[i].center_freq) &&
-		    (chan_list[i].state == CHANNEL_STATE_ENABLE)) {
-			ret = true;
-			goto end;
-		}
+		    (chan_list[i].state == CHANNEL_STATE_ENABLE))
+			return true;
 	}
 
-end:
-	qdf_mem_free(chan_list);
-	return ret;
+	return false;
 }
 
 bool wlan_is_nan_allowed_on_freq(struct wlan_objmgr_pdev *pdev, uint32_t freq)

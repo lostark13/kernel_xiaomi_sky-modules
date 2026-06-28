@@ -116,7 +116,6 @@ _fixed_ipaths = [
 	"components/target_if/ocb/inc",
 	"components/target_if/pkt_capture/inc",
 	"components/target_if/connection_mgr/inc",
-	"components/target_if/blacklist_mgr/inc",
 	"components/target_if/p2p/inc",
 	"components/target_if/ftm_time_sync/inc",
 	"components/target_if/interop_issues_ap/inc",
@@ -274,7 +273,6 @@ _fixed_ipaths = [
 	"core/mac/src/include",
 	"cmn/umac/cmn_services/mgmt_txrx/dispatcher/inc",
 	"cmn/spectral/dispatcher/inc",
-	"components/blacklist_mgr/core/inc",
 	"components/blacklist_mgr/dispatcher/inc",
 	"core/mac/src/sys/legacy/src/platform/inc",
 	"core/mac/src/sys/legacy/src/system/inc",
@@ -766,16 +764,6 @@ _conditional_srcs = {
         True: [
             "core/hdd/src/wlan_hdd_concurrency_matrix.c",
         ],
-    },
-
-   "CONFIG_FEATURE_BLACKLIST_MGR": {
-	True: [
-	    "components/blacklist_mgr/core/src/wlan_blm_core.c",
-	    "components/blacklist_mgr/core/src/wlan_blm_main.c",
-	    "components/blacklist_mgr/dispatcher/src/wlan_blm_tgt_api.c",
-	    "components/blacklist_mgr/dispatcher/src/wlan_blm_ucfg_api.c",
-	    "components/target_if/blacklist_mgr/src/target_if_blm.c",
-	],
     },
     "CONFIG_FEATURE_EPPING": {
         True: [
@@ -2017,7 +2005,6 @@ def _define_module_for_target_variant_chipset(target, variant, chipset):
         cmd = cmd,
     )
 
-    copts.append("-Wunused-but-set-parameter")
     copts.append("-include")
     copts.append("$(location :{}_grep_defines)".format(tvc))
 

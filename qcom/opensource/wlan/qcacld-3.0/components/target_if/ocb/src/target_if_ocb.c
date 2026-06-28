@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -491,7 +490,6 @@ static int target_if_dcc_get_stats_resp(ol_scn_t scn,
 		rc = 0;
 	} else {
 		target_if_fatal("No dcc_stats_indicate callback");
-		response = NULL;
 		rc = -EINVAL;
 	}
 exit:

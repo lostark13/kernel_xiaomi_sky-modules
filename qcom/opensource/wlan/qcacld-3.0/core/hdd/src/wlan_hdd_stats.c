@@ -1911,18 +1911,6 @@ static void wlan_hdd_dealloc_ll_stats(void *priv)
 	qdf_list_destroy(&ll_stats_priv->ll_stats_q);
 }
 
-static QDF_STATUS
-wlan_hdd_set_ll_stats_request_pending(struct hdd_adapter *adapter)
-{
-	if (qdf_atomic_read(&adapter->hdd_stats.is_ll_stats_req_pending)) {
-		hdd_nofl_debug("Previous ll_stats request is in progress");
-		return QDF_STATUS_E_ALREADY;
-	}
-
-	qdf_atomic_set(&adapter->hdd_stats.is_ll_stats_req_pending, 1);
-	return QDF_STATUS_SUCCESS;
-}
-
 #ifdef FEATURE_CLUB_LL_STATS_AND_GET_STATION
 /**
  * cache_station_stats_cb() - cache_station_stats_cb callback function
@@ -1975,11 +1963,16 @@ wlan_hdd_set_station_stats_request_pending(struct hdd_adapter *adapter)
 	if (!vdev)
 		return QDF_STATUS_E_INVAL;
 
+	if (adapter->hdd_stats.is_ll_stats_req_in_progress) {
+		hdd_err("Previous ll_stats request is in progress");
+		hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_STATS_ID);
+		return QDF_STATUS_E_ALREADY;
+	}
+
 	info.cookie = adapter;
 	info.u.get_station_stats_cb = cache_station_stats_cb;
 	info.vdev_id = adapter->vdev_id;
 	info.pdev_id = wlan_objmgr_pdev_get_pdev_id(wlan_vdev_get_pdev(vdev));
-
 	peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_OSIF_STATS_ID);
 	if (!peer) {
 		osif_err("peer is null");
@@ -1987,13 +1980,14 @@ wlan_hdd_set_station_stats_request_pending(struct hdd_adapter *adapter)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	adapter->hdd_stats.is_ll_stats_req_in_progress = true;
+
 	qdf_mem_copy(info.peer_mac_addr, peer->macaddr, QDF_MAC_ADDR_SIZE);
 
 	wlan_objmgr_peer_release_ref(peer, WLAN_OSIF_STATS_ID);
 
 	ucfg_mc_cp_stats_set_pending_req(wlan_vdev_get_psoc(vdev),
 					 TYPE_STATION_STATS, &info);
-
 	hdd_objmgr_put_vdev_by_user(vdev, WLAN_OSIF_STATS_ID);
 	return QDF_STATUS_SUCCESS;
 }
@@ -2008,6 +2002,8 @@ wlan_hdd_reset_station_stats_request_pending(struct wlan_objmgr_psoc *psoc,
 
 	if (!adapter->hdd_ctx->is_get_station_clubbed_in_ll_stats_req)
 		return;
+
+	adapter->hdd_stats.is_ll_stats_req_in_progress = false;
 
 	status = ucfg_mc_cp_stats_get_pending_req(psoc, TYPE_STATION_STATS,
 						  &last_req);
@@ -2080,13 +2076,9 @@ static int wlan_hdd_send_ll_stats_req(struct hdd_adapter *adapter,
 
 	hdd_enter_dev(adapter->dev);
 
-	status = wlan_hdd_set_ll_stats_request_pending(adapter);
-	if (QDF_IS_STATUS_ERROR(status))
-		return qdf_status_to_os_return(status);
-
 	status = wlan_hdd_set_station_stats_request_pending(adapter);
-	if (QDF_IS_STATUS_ERROR(status))
-		hdd_nofl_debug("Requesting LL_STATS only");
+	if (status == QDF_STATUS_E_ALREADY)
+		return qdf_status_to_os_return(status);
 
 	/*
 	 * FW can send radio stats with multiple events and for the first event
@@ -2157,7 +2149,6 @@ static int wlan_hdd_send_ll_stats_req(struct hdd_adapter *adapter,
 	}
 	qdf_list_destroy(&priv->ll_stats_q);
 exit:
-	qdf_atomic_set(&adapter->hdd_stats.is_ll_stats_req_pending, 0);
 	wlan_hdd_reset_station_stats_request_pending(hdd_ctx->psoc, adapter);
 	hdd_exit();
 	osif_request_put(request);
@@ -6682,9 +6673,7 @@ QDF_STATUS wlan_hdd_get_mib_stats(struct hdd_adapter *adapter)
 		return ret;
 	}
 
-#ifdef WLAN_DEBUGFS
 	hdd_debugfs_process_mib_stats(adapter, stats);
-#endif
 
 	wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
 	return ret;
