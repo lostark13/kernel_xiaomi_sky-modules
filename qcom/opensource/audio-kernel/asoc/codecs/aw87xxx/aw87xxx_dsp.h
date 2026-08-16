@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0
+/*
  * aw87xxx_dsp.h
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -9,15 +10,12 @@
  * under  the terms of  the GNU General  Public License as published by the
  * Free Software Foundation;  either version 2 of the  License, or (at your
  * option) any later version.
+ *
  */
-
 #ifndef __AW87XXX_DSP_H__
 #define __AW87XXX_DSP_H__
 
 #include "aw87xxx_device.h"
-
-/*#define AW_MTK_OPEN_DSP_PLATFORM*/
-/*#define AW_QCOM_OPEN_DSP_PLATFORM*/
 
 /*Note: The pord_ID is configured according to different platforms*/
 #define AW_DSP_SLEEP_TIME	(10)
@@ -33,6 +31,9 @@
 #define AWDSP_RX_VMAX_1			(0X10013D18)
 #define AW_MSG_ID_SPIN			(0x10013D2E)
 #define AW_MSG_ID_ALGO_AUTHENTICATION	(0x10013D46)
+
+#define AW_MSG_ID_DTC_STATUS_L		(0x00000018)
+#define AW_MSG_ID_DTC_STATUS_R		(0x00000019)
 
 
 enum {
@@ -71,6 +72,8 @@ int aw87xxx_dsp_get_rx_module_enable(int *enable);
 int aw87xxx_dsp_set_rx_module_enable(int enable);
 int aw87xxx_dsp_get_vmax(uint32_t *vmax, int channel);
 int aw87xxx_dsp_set_vmax(uint32_t vmax, int channel);
+int aw87xxx_dsp_read_dtc_status(char *data, unsigned int data_len, int channel);
+int aw87xxx_dsp_write_dtc_status(char *data, unsigned int data_len, int channel);
 int aw87xxx_dsp_set_spin(uint32_t ctrl_value);
 int aw87xxx_dsp_get_spin(void);
 int aw87xxx_spin_set_record_val(void);

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/* aw87xxx_dsp.c
+/*
+ * aw87xxx_dsp.c
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -9,8 +10,8 @@
  * under  the terms of  the GNU General  Public License as published by the
  * Free Software Foundation;  either version 2 of the  License, or (at your
  * option) any later version.
+ *
  */
-
 #include <linux/uaccess.h>
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -266,6 +267,46 @@ int aw87xxx_dsp_set_vmax(uint32_t vmax, int dev_index)
 	}
 
 	return aw_write_data_to_dsp(param_id, &vmax, sizeof(uint32_t));
+}
+
+int aw87xxx_dsp_read_dtc_status(char *data, unsigned int data_len, int dev_index)
+{
+	int32_t param_id = 0;
+
+	switch (dev_index % AW_DSP_CHANNEL_MAX) {
+	case AW_DSP_CHANNEL_0:
+		param_id = AW_MSG_ID_DTC_STATUS_L;
+		break;
+	case AW_DSP_CHANNEL_1:
+		param_id = AW_MSG_ID_DTC_STATUS_R;
+		break;
+	default:
+		AW_LOGE("algo only support double PA channel:%d unsupport",
+			dev_index);
+		return -EINVAL;
+	}
+
+	return aw_read_data_from_dsp(param_id, data, data_len);
+}
+
+int aw87xxx_dsp_write_dtc_status(char *data, unsigned int data_len, int dev_index)
+{
+	int32_t param_id = 0;
+
+	switch (dev_index % AW_DSP_CHANNEL_MAX) {
+	case AW_DSP_CHANNEL_0:
+		param_id = AW_MSG_ID_DTC_STATUS_L;
+		break;
+	case AW_DSP_CHANNEL_1:
+		param_id = AW_MSG_ID_DTC_STATUS_R;
+		break;
+	default:
+		AW_LOGE("algo only support double PA channel:%d unsupport",
+			dev_index);
+		return -EINVAL;
+	}
+
+	return aw_write_data_to_dsp(param_id, data, data_len);
 }
 
 int aw87xxx_dsp_set_spin(uint32_t ctrl_value)

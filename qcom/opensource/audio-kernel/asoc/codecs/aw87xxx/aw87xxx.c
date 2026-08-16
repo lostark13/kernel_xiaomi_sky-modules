@@ -2,7 +2,7 @@
 /*
  * aw87xxx.c  aw87xxx pa module
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -12,7 +12,6 @@
  * option) any later version.
  *
  */
-
 #include <linux/i2c.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -43,9 +42,16 @@
 #include <linux/ktime.h>
 #include <linux/kthread.h>
 #include <linux/miscdevice.h>
+#include <linux/vmalloc.h>
 #include <uapi/sound/asound.h>
 #include <sound/control.h>
 #include <sound/soc.h>
+#ifdef AW_KERNEL_VER_OVER_5_0_0
+#include <linux/time64.h>
+#else
+#include <linux/time.h>
+#endif
+
 #include "aw87xxx.h"
 #include "aw87xxx_device.h"
 #include "aw87xxx_log.h"
@@ -58,7 +64,7 @@
  * aw87xxx marco
  ******************************************************************/
 #define AW87XXX_I2C_NAME	"aw87xxx_pa"
-#define AW87XXX_DRIVER_VERSION	"v2.14.0"
+#define AW87XXX_DRIVER_VERSION	"v4.0.9"
 #define AW87XXX_FW_BIN_NAME	"aw87xxx_acf.bin"
 
 /*************************************************************************
@@ -101,6 +107,28 @@ static void aw87xxx_algo_auth_work(struct work_struct *work)
 }
 #endif
 
+#ifdef AW_DTC_ENABLE
+#ifdef AW_KERNEL_VER_OVER_5_0_0
+static long long aw87xxx_get_kernel_rtc_time(void)
+{
+	struct timespec64 tv;
+
+	ktime_get_real_ts64(&tv);
+
+	return (tv.tv_sec * 1000 + tv.tv_nsec / 1000000);
+}
+#else
+static long long aw87xxx_get_kernel_rtc_time(void)
+{
+	struct timeval tv;
+
+	do_gettimeofday(&tv);
+
+	return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+#endif
+#endif
+
 static void aw87xxx_update_voltage_max(struct aw87xxx *aw87xxx,
 				struct aw_data_container *data_container)
 {
@@ -113,9 +141,8 @@ static void aw87xxx_update_voltage_max(struct aw87xxx *aw87xxx,
 
 	for (i = 0; i < data_container->len; i = i + 2) {
 		if (data_container->data[i] == vol_desc->addr) {
-			vol_desc->vol_max = data_container->data[i + 1];
-			AW_DEV_LOGD(aw87xxx->dev, "get voltage max = 0x%02x",
-			data_container->data[i + 1]);
+			vol_desc->vol_max = (data_container->data[i + 1] & (~vol_desc->mask)) >> vol_desc->start;
+			AW_DEV_LOGD(aw87xxx->dev, "get voltage max = 0x%02x", vol_desc->vol_max);
 			return;
 		}
 	}
@@ -143,6 +170,9 @@ static int aw87xxx_power_down(struct aw87xxx *aw87xxx, char *profile)
 	if (!prof_desc->prof_st)
 		goto no_bin_pwr_off;
 
+#ifdef AW_DTC_ENABLE
+	aw87xxx_dev_backup_dtc(&aw87xxx->aw_dev, aw87xxx->dev_index, aw87xxx_get_kernel_rtc_time());
+#endif
 
 	data_container = &prof_desc->data_container;
 	AW_DEV_LOGD(aw87xxx->dev, "get profile[%s] data len [%d]",
@@ -233,6 +263,10 @@ static int aw87xxx_power_on(struct aw87xxx *aw87xxx, char *profile)
 
 	aw87xxx->current_profile = prof_desc->prof_name;
 
+#ifdef AW_DTC_ENABLE
+	aw87xxx_dev_sync_dtc(&aw87xxx->aw_dev, aw87xxx->dev_index, aw87xxx_get_kernel_rtc_time());
+#endif
+
 #ifdef AW_ALGO_AUTH_DSP
 	INIT_DELAYED_WORK(&aw87xxx->auth_work, aw87xxx_algo_auth_work);
 	schedule_delayed_work(&aw87xxx->auth_work, msecs_to_jiffies(3000));
@@ -249,6 +283,13 @@ int aw87xxx_update_profile(struct aw87xxx *aw87xxx, char *profile)
 	AW_DEV_LOGD(aw87xxx->dev, "load profile[%s] enter", profile);
 
 	mutex_lock(&aw87xxx->reg_lock);
+
+	if ((strncmp(profile, aw87xxx->current_profile, AW_PROFILE_STR_MAX) == 0)) {
+		AW_DEV_LOGI(aw87xxx->dev, "profile[%s] is already active!", profile);
+		mutex_unlock(&aw87xxx->reg_lock);
+		return 0;
+	}
+
 	aw87xxx_monitor_stop(&aw87xxx->monitor);
 	if (strncmp(profile, aw87xxx->prof_off_name, AW_PROFILE_STR_MAX) == 0) {
 		ret = aw87xxx_power_down(aw87xxx, profile);
@@ -371,15 +412,15 @@ int aw87xxx_set_boost_voltage(int dev_index, int status)
 			if (status == AW_VOLTAGE_HIGH) {
 				AW_DEV_LOGI(aw87xxx->dev, "set reg voltage max: 0x%02x = 0x%02x",
 					vol_desc->addr, vol_desc->vol_max);
-				ret = aw87xxx_dev_i2c_write_byte(&aw87xxx->aw_dev,
-					vol_desc->addr, vol_desc->vol_max);
+				ret = aw87xxx_dev_i2c_write_bits(&aw87xxx->aw_dev,
+					vol_desc->addr, vol_desc->mask, vol_desc->vol_max << vol_desc->start);
 				if (ret < 0)
 					return ret;
 			} else if (status == AW_VOLTAGE_LOW) {
 				AW_DEV_LOGI(aw87xxx->dev, "set reg voltage min: 0x%02x = 0x%02x",
 					vol_desc->addr, vol_desc->vol_min);
-				ret = aw87xxx_dev_i2c_write_byte(&aw87xxx->aw_dev,
-					vol_desc->addr, vol_desc->vol_min);
+				ret = aw87xxx_dev_i2c_write_bits(&aw87xxx->aw_dev,
+					vol_desc->addr, vol_desc->mask, vol_desc->vol_min << vol_desc->start);
 				if (ret < 0)
 					return ret;
 			} else {
@@ -427,6 +468,7 @@ int aw87xxx_get_boost_voltage(int dev_index, int *status)
 				if (ret < 0)
 					return ret;
 
+			reg_voltage_val = (reg_voltage_val & (~vol_desc->mask)) >> vol_desc->start;
 			if (reg_voltage_val ==  vol_desc->vol_max) {
 				*status = AW_VOLTAGE_HIGH;
 			} else if (reg_voltage_val ==  vol_desc->vol_min) {
@@ -625,6 +667,41 @@ static void aw87xxx_algo_auth_misc_deinit(struct aw_device *aw_dev)
  * aw87xxx Kcontrols
  *
  ****************************************************************************/
+static int aw87xxx_switch_info(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_info *uinfo)
+{
+	int count = 0;
+	int ret = 0;
+
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
+	uinfo->count = 1;
+	count = 2;
+
+	uinfo->value.enumerated.items = count;
+
+	if (uinfo->value.enumerated.item >= count)
+		uinfo->value.enumerated.item = count - 1;
+
+	ret = strscpy(uinfo->value.enumerated.name,
+		aw87xxx_monitor_switch[uinfo->value.enumerated.item],
+		strlen(aw87xxx_monitor_switch[uinfo->value.enumerated.item]) + 1);
+	if (ret < 0)
+		AW_LOGE("copy switch name failed");
+
+	return 0;
+}
+
+static int aw87xxx_switch_get(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	struct aw87xxx *aw87xxx = (struct aw87xxx *)kcontrol->private_value;
+
+	ucontrol->value.integer.value[0] = strncmp(aw87xxx->current_profile, aw87xxx->prof_off_name, AW_PROFILE_STR_MAX);
+
+	return 0;
+}
+
+
 static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_info *uinfo)
 {
@@ -712,7 +789,6 @@ static int aw87xxx_profile_switch_get(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int index = 0;
-	char *profile;
 	struct aw87xxx *aw87xxx = (struct aw87xxx *)kcontrol->private_value;
 
 	if (aw87xxx == NULL) {
@@ -725,7 +801,6 @@ static int aw87xxx_profile_switch_get(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 	}
 
-	profile = aw87xxx->current_profile;
 	AW_DEV_LOGI(aw87xxx->dev, "current profile:[%s]",
 		aw87xxx->current_profile);
 
@@ -853,8 +928,8 @@ static int aw87xxx_algo_auth_tlv_rw(struct snd_kcontrol *kcontrol, int op_flag,
 		return -EINVAL;
 	}
 
-	if (size != sizeof(struct algo_auth_data)) {
-		AW_DEV_LOGE(aw87xxx->dev, "size != algo_auth_data");
+	if (size < sizeof(struct algo_auth_data)) {
+		AW_DEV_LOGE(aw87xxx->dev, "size[%d] < algo_auth_data size[%lu]", size, sizeof(struct algo_auth_data));
 		return -EINVAL;
 	}
 
@@ -869,12 +944,12 @@ static int aw87xxx_algo_auth_tlv_rw(struct snd_kcontrol *kcontrol, int op_flag,
 		algo_data.reg_crc = aw_dev->auth_desc.reg_crc;
 		algo_data.check_result = aw_dev->auth_desc.check_result;
 
-		if (copy_to_user((void __user *)tlv, (char *)&algo_data, size))
+		if (copy_to_user((void __user *)tlv, (char *)&algo_data, sizeof(algo_data)))
 			ret = -EFAULT;
 		break;
 	case SNDRV_CTL_TLV_OP_WRITE:
 		AW_DEV_LOGD(aw87xxx->dev, "set algo auth data");
-		if (copy_from_user(&algo_data, (void __user *)tlv, size))
+		if (copy_from_user(&algo_data, (void __user *)tlv, sizeof(algo_data)))
 			ret = -EFAULT;
 
 		aw87xxx_dev_algo_auth_mode(aw_dev, &algo_data);
@@ -1038,6 +1113,21 @@ static int aw87xxx_kcontrol_dynamic_create(struct aw87xxx *aw87xxx,
 	aw87xxx_kcontrol[2].put = aw87xxx_monitor_switch_put;
 	aw87xxx_kcontrol[2].private_value = (unsigned long)aw87xxx;
 
+	kctl_name[3] = devm_kzalloc(aw87xxx->codec->dev, AW_NAME_BUF_MAX,
+			GFP_KERNEL);
+	if (kctl_name[3] == NULL)
+		return -ENOMEM;
+
+	snprintf(kctl_name[3], AW_NAME_BUF_MAX, "aw87xxx_switch_%d",
+			aw87xxx->dev_index);
+
+	aw87xxx_kcontrol[3].name = kctl_name[3];
+	aw87xxx_kcontrol[3].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+	aw87xxx_kcontrol[3].access = SNDRV_CTL_ELEM_ACCESS_READ;
+	aw87xxx_kcontrol[3].info = aw87xxx_switch_info;
+	aw87xxx_kcontrol[3].get = aw87xxx_switch_get;
+	aw87xxx_kcontrol[3].private_value = (unsigned long)aw87xxx;
+
 	ret = aw_componet_codec_ops.add_codec_controls(aw87xxx->codec,
 				aw87xxx_kcontrol, kcontrol_num);
 	if (ret < 0) {
@@ -1046,10 +1136,11 @@ static int aw87xxx_kcontrol_dynamic_create(struct aw87xxx *aw87xxx,
 		return ret;
 	}
 
-	AW_DEV_LOGI(aw87xxx->dev, "add codec controls[%s,%s,%s]",
+	AW_DEV_LOGI(aw87xxx->dev, "add codec controls[%s,%s,%s,%s]",
 		aw87xxx_kcontrol[0].name,
 		aw87xxx_kcontrol[1].name,
-		aw87xxx_kcontrol[2].name);
+		aw87xxx_kcontrol[2].name,
+		aw87xxx_kcontrol[3].name);
 
 	return 0;
 }
@@ -1190,15 +1281,11 @@ static int aw87xxx_init_default_prof(struct aw87xxx *aw87xxx)
 	return 0;
 }
 
-static void aw87xxx_fw_load_work(struct work_struct *work)
+static int aw87xxx_acf_bin_load(struct aw87xxx *aw87xxx)
 {
-	int ret = -1;
-	struct aw87xxx *aw87xxx = container_of(work,
-			struct aw87xxx, fw_load_work.work);
 	struct acf_bin_info *acf_info = &aw87xxx->acf_info;
 	const struct firmware *cont = NULL;
-
-	AW_DEV_LOGD(aw87xxx->dev, "enter");
+	int ret;
 
 	ret = request_firmware(&cont, aw87xxx->fw_name, aw87xxx->dev);
 	if ((ret) || (!cont)) {
@@ -1211,9 +1298,9 @@ static void aw87xxx_fw_load_work(struct work_struct *work)
 			msleep(1000);
 			AW_DEV_LOGD(aw87xxx->dev, "load [%s] try [%d]!",
 						aw87xxx->fw_name, acf_info->load_count);
-			aw87xxx_fw_load_work(work);
+			aw87xxx_acf_bin_load(aw87xxx);
 		}
-		return;
+		return ret;
 	}
 
 	AW_DEV_LOGD(aw87xxx->dev, "loaded %s - size: %zu",
@@ -1223,6 +1310,7 @@ static void aw87xxx_fw_load_work(struct work_struct *work)
 	acf_info->fw_data = vmalloc(cont->size);
 	if (!acf_info->fw_data) {
 		AW_DEV_LOGE(aw87xxx->dev, "fw_data kzalloc memory failed");
+		ret = -ENOMEM;
 		goto exit_vmalloc_failed;
 	}
 	memset(acf_info->fw_data, 0, cont->size);
@@ -1235,17 +1323,210 @@ static void aw87xxx_fw_load_work(struct work_struct *work)
 		goto exit_acf_parse_failed;
 	}
 
-	ret = aw87xxx_init_default_prof(aw87xxx);
-	if (ret < 0) {
-		aw87xxx_fw_cfg_free(aw87xxx);
-		goto exit_acf_parse_failed;
-	}
-	AW_DEV_LOGI(aw87xxx->dev, "acf parse succeed");
-
 exit_acf_parse_failed:
 exit_vmalloc_failed:
 	mutex_unlock(&aw87xxx->reg_lock);
 	release_firmware(cont);
+
+	return ret;
+}
+
+static int aw87xxx_single_bin_load(struct aw87xxx *aw87xxx)
+{
+	struct acf_bin_info *acf_info = &aw87xxx->acf_info;
+	struct aw_prof_info *prof_info = &acf_info->prof_info;
+	struct aw_data_container *aw_fw_data;
+	const struct firmware *cont = NULL;
+	char fw_name[FW_NAME_MAX];
+	int ret, i;
+
+	prof_info->count = aw87xxx->support_prof_count;
+	prof_info->prof_desc = devm_kzalloc(aw87xxx->dev,
+			prof_info->count * sizeof(struct aw_prof_desc), GFP_KERNEL);
+	if (!prof_info->prof_desc) {
+		AW_DEV_LOGE(aw87xxx->dev, "malloc prof_desc failed");
+		return -ENOMEM;
+	}
+
+	aw_fw_data = devm_kzalloc(aw87xxx->dev,
+		sizeof(struct aw_data_container) * aw87xxx->support_prof_count, GFP_KERNEL);
+	if (!aw_fw_data) {
+		AW_DEV_LOGE(aw87xxx->dev, "aw_fw_data malloc failed");
+		ret = -ENOMEM;
+		goto aw_fw_data_malloc_failed;
+	}
+
+	for (i = 0; i < aw87xxx->support_prof_count; i++) {
+		memset(fw_name, 0, sizeof(fw_name));
+		scnprintf(fw_name, FW_NAME_MAX, "aw87xxx_%02d_%s_0x%02x.bin", aw87xxx->dev_index,
+					aw87xxx->support_prof[i], aw87xxx->aw_dev.chipid);
+
+		AW_DEV_LOGI(aw87xxx->dev, "fw_name = %s", fw_name);
+
+		ret = request_firmware(&cont, fw_name, aw87xxx->dev);
+		if ((ret) || (!cont)) {
+			AW_DEV_LOGE(aw87xxx->dev, "request firmware %s failed", fw_name);
+			if (acf_info->load_count == AW_READ_CHIPID_RETRIES) {
+				acf_info->load_count = 0;
+				if (aw_fw_data) {
+					devm_kfree(aw87xxx->dev, aw_fw_data);
+					aw_fw_data = NULL;
+				}
+
+				if (prof_info->prof_desc) {
+					devm_kfree(aw87xxx->dev, prof_info->prof_desc);
+					prof_info->prof_desc = NULL;
+				}
+
+			} else {
+				acf_info->load_count++;
+				/* sleep 1s */
+				msleep(1000);
+				AW_DEV_LOGD(aw87xxx->dev, "load [%s] try [%d]!",
+							aw87xxx->fw_name, acf_info->load_count);
+				goto request_firmware_failed;
+			}
+			return ret;
+		}
+
+		if (cont->size < FW_MIN_SIZE) {
+			AW_DEV_LOGE(aw87xxx->dev, "fw size too small");
+			release_firmware(cont);
+			goto fw_size_too_small;
+		}
+
+		aw_fw_data[i].data = devm_kzalloc(aw87xxx->dev, cont->size, GFP_KERNEL);
+		if (!aw_fw_data[i].data) {
+			AW_DEV_LOGE(aw87xxx->dev, "aw_fw_data[%d].data malloc failed", i);
+			release_firmware(cont);
+			ret = -ENOMEM;
+			goto aw_fw_data_data_failed;
+		}
+		aw_fw_data[i].len = cont->size;
+
+		memcpy(aw_fw_data[i].data, cont->data, cont->size);
+		release_firmware(cont);
+
+	}
+
+	mutex_lock(&aw87xxx->reg_lock);
+	prof_info->prof_name_list = (char (*)[AW_PROFILE_STR_MAX])devm_kzalloc(aw87xxx->dev,
+					prof_info->count * (AW_PROFILE_STR_MAX), GFP_KERNEL);
+	if (!prof_info->prof_name_list) {
+		AW_DEV_LOGE(aw87xxx->dev, "prof_name_list devm_kzalloc failed");
+		ret = -ENOMEM;
+		goto prof_name_list_failed;
+	}
+
+	for (i = 0; i < prof_info->count; i++) {
+		ret = aw_parse_single_bin(aw87xxx->dev, acf_info, aw_fw_data[i], i);
+		if (ret) {
+			AW_DEV_LOGE(aw87xxx->dev, "parse single bin failed");
+			goto aw_parse_single_bin_failed;
+		}
+
+		snprintf(prof_info->prof_name_list[i], AW_PROFILE_STR_MAX, "%s",
+								aw87xxx->support_prof[i]);
+		prof_info->prof_desc[i].prof_name = devm_kzalloc(aw87xxx->dev, 20, GFP_KERNEL);
+		if (!prof_info->prof_desc[i].prof_name) {
+			AW_DEV_LOGE(aw87xxx->dev, "prof_info->prof_desc[%d].prof_name devm_kzalloc failed", i);
+			ret = -ENOMEM;
+			goto prof_name_failed;
+		}
+
+		memcpy(prof_info->prof_desc[i].prof_name, aw87xxx->support_prof[i], strlen(aw87xxx->support_prof[i]));
+		AW_DEV_LOGI(aw87xxx->dev, "prof_info->prof_desc[i].prof_name = %s aw87xxx->support_prof[i] = %s",
+			  prof_info->prof_desc[i].prof_name, aw87xxx->support_prof[i]);
+	}
+	mutex_unlock(&aw87xxx->reg_lock);
+
+	return 0;
+
+request_firmware_failed:
+	if (aw_fw_data) {
+		devm_kfree(aw87xxx->dev, aw_fw_data);
+		aw_fw_data = NULL;
+	}
+
+	if (prof_info->prof_desc) {
+		devm_kfree(aw87xxx->dev, prof_info->prof_desc);
+		prof_info->prof_desc = NULL;
+	}
+
+	aw87xxx_single_bin_load(aw87xxx);
+
+	return ret;
+
+prof_name_failed:
+	for (i = 0; i < prof_info->count; i++) {
+		if (prof_info->prof_desc[i].prof_name) {
+			devm_kfree(aw87xxx->dev, prof_info->prof_desc[i].prof_name);
+			prof_info->prof_desc[i].prof_name = NULL;
+		}
+
+	}
+aw_parse_single_bin_failed:
+	if (prof_info->prof_name_list) {
+		devm_kfree(aw87xxx->dev, prof_info->prof_name_list);
+		prof_info->prof_name_list = NULL;
+	}
+prof_name_list_failed:
+	mutex_unlock(&aw87xxx->reg_lock);
+fw_size_too_small:
+aw_fw_data_data_failed:
+	for (i = 0; i < prof_info->count; i++) {
+		if (aw_fw_data[i].data) {
+			devm_kfree(aw87xxx->dev, aw_fw_data[i].data);
+			aw_fw_data[i].data = NULL;
+		}
+
+	}
+	if (aw_fw_data) {
+		devm_kfree(aw87xxx->dev, aw_fw_data);
+		aw_fw_data = NULL;
+	}
+
+aw_fw_data_malloc_failed:
+	if (prof_info->prof_desc) {
+		devm_kfree(aw87xxx->dev, prof_info->prof_desc);
+		prof_info->prof_desc = NULL;
+	}
+
+	return ret;
+}
+
+static void aw87xxx_fw_load_work(struct work_struct *work)
+{
+	struct aw87xxx *aw87xxx = container_of(work,
+			struct aw87xxx, fw_load_work.work);
+	int ret = -1;
+
+	AW_DEV_LOGD(aw87xxx->dev, "enter");
+
+	if (aw87xxx->bin_type == bin_type_acf) {
+		ret = aw87xxx_acf_bin_load(aw87xxx);
+		if (ret) {
+			ret = aw87xxx_single_bin_load(aw87xxx);
+			if (ret)
+				return;
+		}
+	} else if (aw87xxx->bin_type == bin_type_single) {
+		ret = aw87xxx_single_bin_load(aw87xxx);
+		if (ret)
+			return;
+	} else {
+		AW_DEV_LOGE(aw87xxx->dev, "bin type error\n");
+		return;
+	}
+
+	ret = aw87xxx_init_default_prof(aw87xxx);
+	if (ret < 0) {
+		aw87xxx_fw_cfg_free(aw87xxx);
+		AW_DEV_LOGE(aw87xxx->dev, "aw87xxx_init_default_prof failed\n");
+		return;
+	}
+
+	AW_DEV_LOGI(aw87xxx->dev, "acf parse succeed");
 }
 
 static void aw87xxx_fw_load_init(struct aw87xxx *aw87xxx)
@@ -1280,9 +1561,7 @@ static ssize_t reg_show(struct device *dev,
 	struct aw_device *aw_dev = &aw87xxx->aw_dev;
 
 	mutex_lock(&aw87xxx->reg_lock);
-	for (i = 0; i < aw_dev->reg_max_addr; i++) {
-		if (!(aw_dev->reg_access[i] & AW_DEV_REG_RD_ACCESS))
-			continue;
+	for (i = 0; i <= aw_dev->reg_max_addr; i++) {
 		ret = aw87xxx_dev_i2c_read_byte(&aw87xxx->aw_dev, i, &reg_val);
 		if (ret < 0) {
 			len += snprintf(buf + len, PAGE_SIZE - len,
@@ -1310,7 +1589,7 @@ static ssize_t reg_store(struct device *dev,
 
 	mutex_lock(&aw87xxx->reg_lock);
 	if (sscanf(buf, "0x%x 0x%x", &databuf[0], &databuf[1]) == 2) {
-		if (databuf[0] >= aw87xxx->aw_dev.reg_max_addr) {
+		if (databuf[0] > aw87xxx->aw_dev.reg_max_addr) {
 			AW_DEV_LOGE(aw87xxx->dev, "set reg[0x%x] error,is out of reg_addr_max[0x%x]",
 				databuf[0], aw87xxx->aw_dev.reg_max_addr);
 			mutex_unlock(&aw87xxx->reg_lock);
@@ -1483,6 +1762,7 @@ int aw87xxx_awrw_write(struct aw87xxx *aw87xxx,
 		AW_DEV_LOGE(aw87xxx->dev, "write failed");
 		vfree(data_buf);
 		data_buf = NULL;
+		mutex_unlock(&aw87xxx->reg_lock);
 		return -EFAULT;
 	}
 	mutex_unlock(&aw87xxx->reg_lock);
@@ -1705,6 +1985,7 @@ static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 	int32_t dev_index = -EINVAL;
 	int32_t voltage_min = -EINVAL;
 	struct aw_voltage_desc *vol_desc = &aw87xxx->aw_dev.vol_desc;
+	int count, i;
 
 	ret = of_property_read_u32(dev_node, "dev_index", &dev_index);
 	if (ret < 0) {
@@ -1731,13 +2012,13 @@ static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 		aw87xxx->aw_dev.hwen_status = AW_DEV_HWEN_OFF;
 		AW_DEV_LOGI(aw87xxx->dev, "reset gpio[%d] parse succeed", ret);
 		if (gpio_is_valid(aw87xxx->aw_dev.rst_gpio)) {
-			ret = devm_gpio_request_one(aw87xxx->dev,
-					aw87xxx->aw_dev.rst_gpio,
-					GPIOF_OUT_INIT_LOW, "aw87xxx_reset");
+			ret = gpio_request_one(aw87xxx->aw_dev.rst_gpio, GPIOF_OUT_INIT_LOW, "aw87xxx_reset");
 			if (ret < 0) {
 				AW_DEV_LOGE(aw87xxx->dev, "reset request failed");
 				return ret;
 			}
+
+			gpio_free(aw87xxx->aw_dev.rst_gpio);
 		}
 	}
 
@@ -1755,7 +2036,62 @@ static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 	aw87xxx_device_parse_port_id_dt(&aw87xxx->aw_dev);
 	aw87xxx_device_parse_topo_id_dt(&aw87xxx->aw_dev);
 
+	count = of_property_count_strings(dev_node, "scene_name");
+	if (count <= 0) {
+		AW_DEV_LOGI(aw87xxx->dev, "scene name get failed");
+		aw87xxx->bin_type = bin_type_acf;
+
+		aw87xxx->support_prof_count = 2;
+		aw87xxx->support_prof = devm_kcalloc(aw87xxx->dev, aw87xxx->support_prof_count,
+							sizeof(char *), GFP_KERNEL);
+		if (!aw87xxx->support_prof) {
+			AW_DEV_LOGE(aw87xxx->dev,  "support_prof malloc failed");
+			ret = -ENOMEM;
+			goto support_prof_failed;
+		}
+		aw87xxx->support_prof[0] = devm_kzalloc(aw87xxx->dev, FW_NAME_MAX, GFP_KERNEL);
+		if (!aw87xxx->support_prof[0]) {
+			AW_DEV_LOGE(aw87xxx->dev,  "support_prof[0]  malloc failed");
+			ret = -ENOMEM;
+			goto support_prof_failed0;
+		}
+		aw87xxx->support_prof[1] = devm_kzalloc(aw87xxx->dev, FW_NAME_MAX, GFP_KERNEL);
+		if (!aw87xxx->support_prof[1]) {
+			AW_DEV_LOGE(aw87xxx->dev,  "support_prof[1]  malloc failed");
+			ret = -ENOMEM;
+			goto support_prof_failed1;
+		}
+
+		snprintf(aw87xxx->support_prof[0], FW_NAME_MAX, "Music");
+		snprintf(aw87xxx->support_prof[1], FW_NAME_MAX, "Off");
+	} else {
+		aw87xxx->support_prof_count = count;
+		aw87xxx->bin_type = bin_type_single;
+		aw87xxx->support_prof = devm_kcalloc(aw87xxx->dev, count,
+							sizeof(char *), GFP_KERNEL);
+		if (!aw87xxx->support_prof) {
+			return -ENOMEM;
+		}
+		for (i = 0; i < count; i++) {
+			ret = of_property_read_string_index(dev_node, "scene_name",
+								i, (const char **)&aw87xxx->support_prof[i]);
+			if (ret) {
+				AW_DEV_LOGE(aw87xxx->dev, "failed to read scene_name %d\n", i);
+				return -EINVAL;
+			}
+
+			AW_DEV_LOGI(aw87xxx->dev, "support_prof = %s", aw87xxx->support_prof[i]);
+		}
+	}
+
 	return 0;
+
+support_prof_failed1:
+	devm_kfree(aw87xxx->dev, aw87xxx->support_prof[0]);
+support_prof_failed0:
+	devm_kfree(aw87xxx->dev, aw87xxx->support_prof);
+support_prof_failed:
+	return ret;
 }
 
 static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
@@ -1776,7 +2112,6 @@ static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
 	aw87xxx->aw_dev.i2c_addr = client->addr;
 	aw87xxx->aw_dev.i2c = client;
 	aw87xxx->aw_dev.hwen_status = false;
-	aw87xxx->aw_dev.reg_access = NULL;
 	aw87xxx->aw_dev.hwen_status = AW_DEV_HWEN_INVALID;
 	aw87xxx->off_bin_status = AW87XXX_NO_OFF_BIN;
 	aw87xxx->codec = NULL;
@@ -1788,13 +2123,44 @@ static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
 	return aw87xxx;
 }
 
-static int aw87xxx_i2c_probe(struct i2c_client *client,
-				const struct i2c_device_id *id)
+static void aw87xxx_check_rst(struct aw87xxx *new_dev)
+{
+	struct list_head *pos = NULL;
+	struct aw87xxx *aw87xxx = NULL;
+	int cnt = 0;
+
+	if(g_aw87xxx_dev_cnt == 1){
+		new_dev->aw_dev.rst_list_flag = 0;
+		AW_DEV_LOGE(new_dev->dev, "aw87xxx_check_rst rst_list_flag = %d",new_dev->aw_dev.rst_list_flag);
+		return;
+	}
+
+	list_for_each(pos, &g_aw87xxx_list) {
+		aw87xxx = list_entry(pos, struct aw87xxx, list);
+		if (aw87xxx->aw_dev.rst_gpio == new_dev->aw_dev.rst_gpio) {
+			new_dev->aw_dev.rst_list_flag = aw87xxx->aw_dev.rst_list_flag;
+			AW_DEV_LOGE(new_dev->dev, "aw87xxx_check_rst rst_list_flag = %d",new_dev->aw_dev.rst_list_flag);
+			return;
+		}
+		if(cnt < aw87xxx->aw_dev.rst_list_flag){
+			cnt = aw87xxx->aw_dev.rst_list_flag;
+		}
+	}
+	new_dev->aw_dev.rst_list_flag = cnt + 1;
+	AW_DEV_LOGE(new_dev->dev, "aw87xxx_check_rst rst_list_flag = %d",new_dev->aw_dev.rst_list_flag);
+}
+
+#ifdef AW_KERNEL_VER_OVER_6_6_0
+static int aw87xxx_i2c_probe(struct i2c_client *client)
+#else
+static int aw87xxx_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#endif
 {
 	struct device_node *dev_node = client->dev.of_node;
 	struct aw87xxx *aw87xxx = NULL;
 	int ret = -1;
 
+	mutex_lock(&g_aw87xxx_mutex_lock);
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		AW_DEV_LOGE(&client->dev, "check_functionality failed");
 		ret = -ENODEV;
@@ -1845,8 +2211,9 @@ static int aw87xxx_i2c_probe(struct i2c_client *client,
 		aw87xxx_algo_auth_misc_init(&aw87xxx->aw_dev);
 
 	/*add device to total list */
-	mutex_lock(&g_aw87xxx_mutex_lock);
 	g_aw87xxx_dev_cnt++;
+	aw87xxx_check_rst(aw87xxx);
+	aw87xxx_dev_add_dev_list(&aw87xxx->aw_dev);
 	list_add(&aw87xxx->list, &g_aw87xxx_list);
 	mutex_unlock(&g_aw87xxx_mutex_lock);
 
@@ -1863,6 +2230,7 @@ exit_dtsi_parse_failed:
 	aw87xxx = NULL;
 exit_malloc_init_failed:
 exit_check_functionality_failed:
+	mutex_unlock(&g_aw87xxx_mutex_lock);
 	return ret;
 }
 

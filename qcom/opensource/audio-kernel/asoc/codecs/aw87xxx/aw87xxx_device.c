@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/* aw87xxx_device.c  aw87xxx pa module
+/*
+ * aw87xxx_device.c  aw87xxx pa module
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -11,7 +12,6 @@
  * option) any later version.
  *
  */
-
 #include <linux/i2c.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
@@ -27,22 +27,12 @@
 #include "aw87xxx_device.h"
 #include "aw87xxx_dsp.h"
 #include "aw87xxx_log.h"
-#include "aw87xxx_pid_9b_reg.h"
-#include "aw87xxx_pid_18_reg.h"
-#include "aw87xxx_pid_39_reg.h"
-#include "aw87xxx_pid_59_3x9_reg.h"
-#include "aw87xxx_pid_59_5x9_reg.h"
-#include "aw87xxx_pid_5a_reg.h"
-#include "aw87xxx_pid_76_reg.h"
-#include "aw87xxx_pid_60_reg.h"
-#include "aw87xxx_pid_c1_reg.h"
-#include "aw87xxx_pid_c2_reg.h"
 
 #ifdef AW_ALGO_AUTH_DSP
 static DEFINE_MUTEX(g_algo_auth_dsp_lock);
 int g_algo_auth_st;
 #endif
-
+static LIST_HEAD(g_dev_list);
 /*************************************************************************
  * aw87xxx variable
  ************************************************************************/
@@ -50,9 +40,16 @@ const char *g_aw_pid_9b_product[] = {
 	"aw87319",
 	"AW87319",
 };
+const struct aw_product_tab g_aw_pid_9b_product_tab[] = {
+	{sizeof(g_aw_pid_9b_product) / sizeof(char *), g_aw_pid_9b_product},
+};
+
 const char *g_aw_pid_18_product[] = {
 	"aw87358",
 	"AW87358",
+};
+const struct aw_product_tab g_aw_pid_18_product_tab[] = {
+	{sizeof(g_aw_pid_18_product) / sizeof(char *), g_aw_pid_18_product},
 };
 
 const char *g_aw_pid_39_product[] = {
@@ -63,12 +60,18 @@ const char *g_aw_pid_39_product[] = {
 	"aw87349",
 	"AW87349",
 };
+const struct aw_product_tab g_aw_pid_39_product_tab[] = {
+	{sizeof(g_aw_pid_39_product) / sizeof(char *), g_aw_pid_39_product},
+};
 
 const char *g_aw_pid_59_3x9_product[] = {
 	"aw87359",
 	"AW87359",
 	"aw87389",
 	"AW87389",
+};
+const struct aw_product_tab g_aw_pid_59_3x9_product_tab[] = {
+	{sizeof(g_aw_pid_59_3x9_product) / sizeof(char *), g_aw_pid_59_3x9_product},
 };
 
 const char *g_aw_pid_59_5x9_product[] = {
@@ -80,6 +83,9 @@ const char *g_aw_pid_59_5x9_product[] = {
 	"AW87529",
 	"aw87539",
 	"AW87539",
+};
+const struct aw_product_tab g_aw_pid_59_5x9_product_tab[] = {
+	{sizeof(g_aw_pid_59_5x9_product) / sizeof(char *), g_aw_pid_59_5x9_product},
 };
 
 const char *g_aw_pid_5a_product[] = {
@@ -96,6 +102,9 @@ const char *g_aw_pid_5a_product[] = {
 	"aw87579G",
 	"AW87579G",
 };
+const struct aw_product_tab g_aw_pid_5a_product_tab[] = {
+	{sizeof(g_aw_pid_5a_product) / sizeof(char *), g_aw_pid_5a_product},
+};
 
 const char *g_aw_pid_76_product[] = {
 	"aw87390",
@@ -108,6 +117,9 @@ const char *g_aw_pid_76_product[] = {
 	"AW87360",
 	"aw87390G",
 	"AW87390G",
+};
+const struct aw_product_tab g_aw_pid_76_product_tab[] = {
+	{sizeof(g_aw_pid_76_product) / sizeof(char *), g_aw_pid_76_product},
 };
 
 const char *g_aw_pid_60_product[] = {
@@ -122,12 +134,24 @@ const char *g_aw_pid_60_product[] = {
 	"aw87550",
 	"AW87550",
 };
+const struct aw_product_tab g_aw_pid_60_product_tab[] = {
+	{sizeof(g_aw_pid_60_product) / sizeof(char *), g_aw_pid_60_product},
+};
 
 const char *g_aw_pid_c1_product[] = {
 	"aw87391",
 	"AW87391",
 	"aw87392",
 	"AW87392",
+	"aw87393",
+	"AW87393",
+	"aw87402",
+	"AW87402",
+	"aw87392e",
+	"AW87392E"
+};
+const struct aw_product_tab g_aw_pid_c1_product_tab[] = {
+	{sizeof(g_aw_pid_c1_product) / sizeof(char *), g_aw_pid_c1_product},
 };
 
 const char *g_aw_pid_c2_product[] = {
@@ -135,12 +159,38 @@ const char *g_aw_pid_c2_product[] = {
 	"AW87565",
 	"aw87566",
 	"AW87566",
-	"aw87564",
-	"AW87564",
+	"aw81564",
+	"AW81564",
 	"aw87567",
 	"AW87567",
+	"aw87564",
+	"AW87564",
+	"aw87580",
+	"AW87580"
+};
+const char *g_aw_pid_c2_product3[] = {
 	"aw87568",
 	"AW87568",
+	"aw87571",
+	"AW87571",
+};
+const struct aw_product_tab g_aw_pid_c2_product_tab[] = {
+	{sizeof(g_aw_pid_c2_product) / sizeof(char *), g_aw_pid_c2_product},
+	{sizeof(g_aw_pid_c2_product) / sizeof(char *), g_aw_pid_c2_product},
+	{sizeof(g_aw_pid_c2_product) / sizeof(char *), g_aw_pid_c2_product},
+	{sizeof(g_aw_pid_c2_product3) / sizeof(char *), g_aw_pid_c2_product3}
+};
+
+const char *g_aw_pid_23_product[] = {
+	"aw87394",
+	"AW87394",
+	"aw87395",
+	"AW87395",
+	"aw87490",
+	"AW87490"
+};
+const struct aw_product_tab g_aw_pid_23_product_tab[] = {
+	{sizeof(g_aw_pid_23_product) / sizeof(char *), g_aw_pid_23_product},
 };
 
 static int aw87xxx_dev_get_chipid(struct aw_device *aw_dev);
@@ -252,41 +302,6 @@ int aw87xxx_dev_i2c_write_bits(struct aw_device *aw_dev,
  * aw87xxx device update profile data to registers
  *
  ************************************************************************/
-static int aw87xxx_dev_reg_update(struct aw_device *aw_dev,
-			struct aw_data_container *profile_data)
-{
-	int i = 0;
-	int ret = -1;
-
-	if (profile_data == NULL)
-		return -EINVAL;
-
-	if (aw_dev->hwen_status == AW_DEV_HWEN_OFF) {
-		AW_DEV_LOGE(aw_dev->dev, "dev is pwr_off,can not update reg");
-		return -EINVAL;
-	}
-
-	for (i = 0; i < profile_data->len; i = i + 2) {
-		AW_DEV_LOGI(aw_dev->dev, "reg=0x%02x, val = 0x%02x",
-			profile_data->data[i], profile_data->data[i + 1]);
-
-		/*delay ms*/
-		if (profile_data->data[i] == AW87XXX_DELAY_REG_ADDR) {
-			AW_DEV_LOGI(aw_dev->dev, "delay %d ms", profile_data->data[i + 1]);
-			usleep_range(profile_data->data[i + 1] * AW87XXX_REG_DELAY_TIME,
-				profile_data->data[i + 1] * AW87XXX_REG_DELAY_TIME + 10);
-			continue;
-		}
-
-		ret = aw87xxx_dev_i2c_write_byte(aw_dev, profile_data->data[i],
-				profile_data->data[i + 1]);
-		if (ret < 0)
-			return ret;
-	}
-
-	return 0;
-}
-
 static void aw87xxx_dev_reg_mute_bits_set(struct aw_device *aw_dev,
 				uint8_t *reg_val, bool enable)
 {
@@ -299,57 +314,150 @@ static void aw87xxx_dev_reg_mute_bits_set(struct aw_device *aw_dev,
 	}
 }
 
-static int aw87xxx_dev_reg_update_mute(struct aw_device *aw_dev,
+/*static int aw87xxx_dev_reg_update(struct aw_device *aw_dev,
 			struct aw_data_container *profile_data)
 {
 	int i = 0;
 	int ret = -1;
+	uint8_t reg_addr = 0;
 	uint8_t reg_val = 0;
 
 	if (profile_data == NULL)
 		return -EINVAL;
 
 	if (aw_dev->hwen_status == AW_DEV_HWEN_OFF) {
-		AW_DEV_LOGE(aw_dev->dev, "hwen is off,can not update reg");
-		return -EINVAL;
-	}
-
-	if (aw_dev->mute_desc.mask == AW_DEV_REG_INVALID_MASK) {
-		AW_DEV_LOGE(aw_dev->dev, "mute ctrl mask invalid");
+		AW_DEV_LOGE(aw_dev->dev, "hwen is off, can not update reg");
 		return -EINVAL;
 	}
 
 	for (i = 0; i < profile_data->len; i = i + 2) {
-		AW_DEV_LOGI(aw_dev->dev, "reg=0x%02x, val = 0x%02x",
-			profile_data->data[i], profile_data->data[i + 1]);
-		/*delay ms*/
-		if (profile_data->data[i] == AW87XXX_DELAY_REG_ADDR) {
-			AW_DEV_LOGI(aw_dev->dev, "delay %d ms", profile_data->data[i + 1]);
-			usleep_range(profile_data->data[i + 1] * AW87XXX_REG_DELAY_TIME,
-				profile_data->data[i + 1] * AW87XXX_REG_DELAY_TIME + 10);
+		reg_addr = profile_data->data[i];
+		reg_val = profile_data->data[i + 1];
+
+		AW_DEV_LOGI(aw_dev->dev, "reg=0x%02x, val = 0x%02x", reg_addr, reg_val);
+
+		if (reg_addr == AW87XXX_DELAY_REG_ADDR) {
+			AW_DEV_LOGI(aw_dev->dev, "delay %d ms", reg_val);
+			usleep_range(reg_val * AW87XXX_REG_DELAY_TIME, reg_val * AW87XXX_REG_DELAY_TIME + 10);
 			continue;
 		}
 
-		reg_val = profile_data->data[i + 1];
-		if (profile_data->data[i] == aw_dev->mute_desc.addr) {
+		if ((aw_dev->mute_desc.addr != AW_REG_NONE) &&
+			(reg_addr == aw_dev->mute_desc.addr)) {
 			aw87xxx_dev_reg_mute_bits_set(aw_dev, &reg_val, true);
-			AW_DEV_LOGD(aw_dev->dev, "change mute_mask, val = 0x%02x",
-				reg_val);
+			AW_DEV_LOGD(aw_dev->dev, "change mute_mask, val = 0x%02x", reg_val);
 		}
 
-		ret = aw87xxx_dev_i2c_write_byte(aw_dev, profile_data->data[i], reg_val);
+		ret = aw87xxx_dev_i2c_write_byte(aw_dev, reg_addr, reg_val);
 		if (ret < 0)
 			return ret;
 	}
 
 	return 0;
+}*/
+
+static int aw_send_cache(struct aw_device *aw_dev, struct aw_reg_cache *cache)
+{
+	uint8_t *data1 = NULL;
+	int ret = -1;
+    if (cache->count == 0)
+		return 0;
+
+    data1 = kmalloc(cache->count + 1, GFP_KERNEL);
+    if (!data1)
+	return -ENOMEM;
+
+    data1[0] = cache->start_addr;
+    memcpy(&data1[1], cache->data, cache->count);
+    AW_DEV_LOGI(aw_dev->dev, "reg=0x%02x, count = %d", cache->start_addr, cache->count);
+    ret = i2c_master_send(aw_dev->i2c, data1, cache->count + 1);
+    kfree(data1);
+    memset(cache->data, 0, sizeof(cache->data));
+	cache->count = 0;
+
+    if (ret < 0) {
+        AW_DEV_LOGE(aw_dev->dev, "I2C send error: %d", ret);
+        return ret;
+    }
+    return 0;
 }
 
+static int aw87xxx_dev_reg_update(struct aw_device *aw_dev,
+	struct aw_data_container *profile_data)
+{
+	int i = 0;
+	int ret = -1;
+	uint8_t reg_addr = 0;
+	uint8_t reg_val = 0;
+	struct aw_reg_cache cache = {0};
+
+	if (profile_data == NULL)
+	return -EINVAL;
+
+	if (aw_dev->hwen_status == AW_DEV_HWEN_OFF) {
+		AW_DEV_LOGE(aw_dev->dev, "hwen is off, can not update reg");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < profile_data->len; i = i + 2) {
+		reg_addr = profile_data->data[i];
+		reg_val = profile_data->data[i + 1];
+		AW_DEV_LOGI(aw_dev->dev, "reg=0x%02x, val = 0x%02x", reg_addr, reg_val);
+
+		if (reg_addr == aw_dev->cm_volt_desc.addr) {
+			aw_dev->cm_volt_desc.init = reg_val & (~aw_dev->cm_volt_desc.mask);
+		}
+
+		 /*delay ms*/
+		if (reg_addr == AW87XXX_DELAY_REG_ADDR) {
+			if(cache.count > 0){
+				ret = aw_send_cache(aw_dev, &cache);
+				if (ret < 0)
+					return ret;
+			}
+			AW_DEV_LOGI(aw_dev->dev, "delay %d ms", reg_val);
+			usleep_range(reg_val * AW87XXX_REG_DELAY_TIME, reg_val * AW87XXX_REG_DELAY_TIME + 10);
+			continue;
+		}
+
+		if ((aw_dev->mute_desc.addr != AW_REG_NONE) &&
+			(reg_addr == aw_dev->mute_desc.addr)) {
+				if(cache.count > 0){
+					ret = aw_send_cache(aw_dev, &cache);
+					if (ret < 0)
+						return ret;
+				}
+			aw87xxx_dev_reg_mute_bits_set(aw_dev, &reg_val, true);
+			AW_DEV_LOGD(aw_dev->dev, "change mute_mask, val = 0x%02x", reg_val);
+			continue;
+		}
+
+		if (cache.count > 0 && (reg_addr != (cache.start_addr + cache.count))) {
+			ret = aw_send_cache(aw_dev, &cache);
+			if (ret < 0)
+				return ret;
+		}
+
+		if (cache.count == 0) {
+			cache.start_addr = reg_addr;
+		}
+
+		cache.data[cache.count++] = reg_val;
+	}
+
+	ret = aw_send_cache(aw_dev, &cache);
+	return ret;
+}
 /************************************************************************
  *
  * aw87xxx device hadware and soft contols
  *
  ************************************************************************/
+void aw87xxx_dev_add_dev_list(struct aw_device *aw_dev)
+{
+	list_add(&aw_dev->list, &g_dev_list);
+}
+
 static bool aw87xxx_dev_gpio_is_valid(struct aw_device *aw_dev)
 {
 	if (gpio_is_valid(aw_dev->rst_gpio))
@@ -360,31 +468,54 @@ static bool aw87xxx_dev_gpio_is_valid(struct aw_device *aw_dev)
 
 void aw87xxx_dev_hw_pwr_ctrl(struct aw_device *aw_dev, bool enable)
 {
+	struct list_head *pos = NULL;
+	struct aw_device *dev_check = NULL;
+	int flag = 0;
+
 	if (aw_dev->hwen_status == AW_DEV_HWEN_INVALID) {
 		AW_DEV_LOGD(aw_dev->dev, "product not have reset-pin,hardware pwd control invalid");
 		return;
 	}
+
+	if (!aw87xxx_dev_gpio_is_valid(aw_dev)) {
+		AW_DEV_LOGI(aw_dev->dev, "hw already power %s", enable ? "on" : "off");
+		return;
+	}
+
+	if (gpio_request(aw_dev->rst_gpio, "aw87xxx_reset") < 0) {
+		AW_DEV_LOGE(aw_dev->dev, "reset request failed");
+		return;
+	}
+
 	if (enable) {
-		if (aw87xxx_dev_gpio_is_valid(aw_dev)) {
+		if (gpio_get_value_cansleep(aw_dev->rst_gpio) == AW_GPIO_LOW_LEVEL) {
 			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
 			mdelay(2);
 			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_HIGHT_LEVEL);
 			mdelay(2);
-			aw_dev->hwen_status = AW_DEV_HWEN_ON;
-			AW_DEV_LOGI(aw_dev->dev, "hw power on");
-		} else {
-			AW_DEV_LOGI(aw_dev->dev, "hw already power on");
+			AW_DEV_LOGI(aw_dev->dev, "hw power real on");
 		}
+
+		aw_dev->hwen_status = AW_DEV_HWEN_ON;
+		AW_DEV_LOGI(aw_dev->dev, "hw power on");
 	} else {
-		if (aw87xxx_dev_gpio_is_valid(aw_dev)) {
-			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
-			mdelay(2);
-			aw_dev->hwen_status = AW_DEV_HWEN_OFF;
-			AW_DEV_LOGI(aw_dev->dev, "hw power off");
-		} else {
-			AW_DEV_LOGI(aw_dev->dev, "hw already power off");
+		aw_dev->hwen_status = AW_DEV_HWEN_OFF;
+		list_for_each(pos, &g_dev_list) {
+			dev_check = list_entry(pos, struct aw_device, list);
+			if(aw_dev->rst_list_flag == dev_check->rst_list_flag && dev_check->hwen_status == AW_DEV_HWEN_ON){
+				flag = 1;
+			}
 		}
+		if (flag == 0) {
+			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
+			AW_DEV_LOGI(aw_dev->dev, "hw power real off");
+			mdelay(2);
+		}
+
+		AW_DEV_LOGI(aw_dev->dev, "hw power off");
 	}
+
+	gpio_free(aw_dev->rst_gpio);
 }
 
 static int aw87xxx_dev_mute_ctrl(struct aw_device *aw_dev, bool enable)
@@ -410,9 +541,7 @@ static int aw87xxx_dev_mute_ctrl(struct aw_device *aw_dev, bool enable)
 
 void aw87xxx_dev_soft_reset(struct aw_device *aw_dev)
 {
-	int i = 0;
 	int ret = -1;
-	struct aw_soft_rst_desc *soft_rst = &aw_dev->soft_rst_desc;
 
 	AW_DEV_LOGD(aw_dev->dev, "enter");
 
@@ -421,34 +550,12 @@ void aw87xxx_dev_soft_reset(struct aw_device *aw_dev)
 		return;
 	}
 
-	if (aw_dev->soft_rst_enable == AW_DEV_SOFT_RST_DISENABLE) {
-		AW_DEV_LOGD(aw_dev->dev, "softrst is disenable");
+	ret = aw87xxx_dev_i2c_write_byte(aw_dev, AW87XXX_CHIPIDL_REG, AW87XXX_SW_RESET_PASSWORD);
+	if (ret < 0) {
+		AW_DEV_LOGE(aw_dev->dev, "write failed, ret = %d", ret);
 		return;
 	}
 
-	if (soft_rst->access == NULL || soft_rst->len == 0) {
-		AW_DEV_LOGE(aw_dev->dev, "softrst_info not init");
-		return;
-	}
-
-	if (soft_rst->len % 2) {
-		AW_DEV_LOGE(aw_dev->dev, "softrst data_len[%d] is odd number,data not available",
-			aw_dev->soft_rst_desc.len);
-		return;
-	}
-
-	for (i = 0; i < soft_rst->len; i += 2) {
-		AW_DEV_LOGD(aw_dev->dev, "softrst_reg=0x%02x, val = 0x%02x",
-			soft_rst->access[i], soft_rst->access[i + 1]);
-
-		ret = aw87xxx_dev_i2c_write_byte(aw_dev, soft_rst->access[i],
-				soft_rst->access[i + 1]);
-		if (ret < 0) {
-			AW_DEV_LOGE(aw_dev->dev, "write failed,ret = %d,cnt=%d",
-				ret, i);
-			return;
-		}
-	}
 	AW_DEV_LOGD(aw_dev->dev, "down");
 }
 
@@ -472,8 +579,8 @@ int aw87xxx_dev_default_pwr_off(struct aw_device *aw_dev,
 		}
 	}
 
-	if (aw_dev->chipid == AW_DEV_CHIPID_C2)
-		mdelay(5);
+	if (aw_dev->delay_desc.power_off_delay_ms > 0)
+		mdelay(aw_dev->delay_desc.power_off_delay_ms);
 
 	aw87xxx_dev_hw_pwr_ctrl(aw_dev, false);
 	AW_DEV_LOGD(aw_dev->dev, "down");
@@ -490,7 +597,6 @@ reg_off_update_failed:
  * aw87xxx device power on process function
  *
  ************************************************************************/
-
 int aw87xxx_dev_default_pwr_on(struct aw_device *aw_dev,
 			struct aw_data_container *profile_data)
 {
@@ -499,12 +605,26 @@ int aw87xxx_dev_default_pwr_on(struct aw_device *aw_dev,
 	/*hw power on*/
 	aw87xxx_dev_hw_pwr_ctrl(aw_dev, true);
 
-	if (aw_dev->chipid == AW_DEV_CHIPID_C2)
-		mdelay(3);
+	if (aw_dev->delay_desc.power_on_delay_ms > 0)
+		mdelay(aw_dev->delay_desc.power_on_delay_ms);
+
+	if (aw_dev->mute_desc.addr != AW_REG_NONE) {
+		/* open the mute */
+		ret = aw87xxx_dev_mute_ctrl(aw_dev, true);
+		if (ret < 0)
+			return ret;
+	}
 
 	ret = aw87xxx_dev_reg_update(aw_dev, profile_data);
 	if (ret < 0)
 		return ret;
+
+	if (aw_dev->mute_desc.addr != AW_REG_NONE) {
+		/* close the mute */
+		ret = aw87xxx_dev_mute_ctrl(aw_dev, false);
+		if (ret < 0)
+			return ret;
+	}
 
 	return 0;
 }
@@ -649,6 +769,30 @@ int aw87xxx_dev_algo_auth_mode(struct aw_device *aw_dev, struct algo_auth_data *
 	return ret;
 }
 
+#ifdef AW_DTC_ENABLE
+int aw87xxx_dev_backup_dtc(struct aw_device *aw_dev, int dev_index, long long dtc)
+{
+	aw_dev->dtc_desc.last_time = dtc;
+	return aw87xxx_dsp_read_dtc_status((char *)&(aw_dev->dtc_desc.dtc), sizeof(struct dtc_status), dev_index);
+}
+
+int aw87xxx_dev_sync_dtc(struct aw_device *aw_dev, int dev_index, long long dtc)
+{
+	if (!aw_dev->dtc_desc.last_time) {
+		aw_dev->dtc_desc.dtc.interval_time = -1;
+	} else {
+		long long time = dtc - aw_dev->dtc_desc.last_time;
+		if ((time > 0x7FFFFFFF) || (time <= 0)) {
+			aw_dev->dtc_desc.dtc.interval_time = -1;
+		} else {
+			aw_dev->dtc_desc.dtc.interval_time = time / 100;
+		}
+	}
+
+	return aw87xxx_dsp_write_dtc_status((char *)&(aw_dev->dtc_desc.dtc), sizeof(struct dtc_status), dev_index);
+}
+#endif
+
 #ifdef AW_ALGO_AUTH_DSP
 int aw87xxx_dev_algo_auth_dsp_mode(struct aw_device *aw_dev, struct algo_auth_data *algo_data)
 {
@@ -717,11 +861,107 @@ static void aw_dev_auth_reg_none(struct aw_device *aw_dev)
 	aw_dev->auth_desc.reg_out_h = AW_REG_NONE;
 }
 
+static uint8_t aw_dev_check_product(
+	struct aw_device *aw_dev, const struct aw_mark_desc *mark, const struct aw_product_tab *product, uint8_t count)
+{
+	uint8_t reg_val = 0;
+	uint8_t index = 0;
+
+	if (mark->addr != AW_REG_NONE) {
+		aw87xxx_dev_i2c_write_bits(aw_dev, aw_dev->en_desc.addr, aw_dev->en_desc.mask, aw_dev->en_desc.enable);
+		mdelay(1);
+		aw87xxx_dev_i2c_read_byte(aw_dev, mark->addr, &reg_val);
+		aw87xxx_dev_i2c_write_bits(aw_dev, aw_dev->en_desc.addr, aw_dev->en_desc.mask, aw_dev->en_desc.disable);
+
+		reg_val = (reg_val & ~(mark->mask)) >> mark->start;
+	}
+	index = reg_val >= count ? 0 : reg_val;
+	aw_dev->product_tab = product[index].product_tab;
+	aw_dev->product_cnt = product[index].count;
+
+	return reg_val;
+}
+
 /****************************************************************************
  *
  * aw87xxx product attributes init info
  *
  ****************************************************************************/
+static int aw87xxx_dev_common_init(struct aw_device *aw_dev,
+	const struct aw_dev_property *property)
+{
+	int ret = 0;
+
+	aw_dev->reg_max_addr = property->max_addr;
+
+	aw_dev->soft_off_enable = property->soft_off_enabled;
+
+	aw_dev->delay_desc.power_on_delay_ms = property->power_on_delay_ms;
+	aw_dev->delay_desc.power_off_delay_ms = property->power_off_delay_ms;
+
+	aw_dev->rec_desc.addr = AW87XXX_SYSCTRL_REG;
+	aw_dev->rec_desc.disable = AW87XXX_EN_RCV_DISABLE;
+	aw_dev->rec_desc.enable = AW87XXX_EN_RCV_ENABLE;
+	aw_dev->rec_desc.mask = (uint8_t)AW87XXX_EN_RCV_MASK;
+
+	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_ESD_REG;
+	aw_dev->esd_desc.first_update_reg_val = property->esd_default;
+
+	aw_dev->ops.pwr_on_func = property->ops.pwr_on_func;
+	aw_dev->ops.pwr_off_func = property->ops.pwr_off_func;
+
+	aw_dev->en_desc.addr = AW87XXX_SYSCTRL_REG;
+	aw_dev->en_desc.mask = AW87XXX_EN_SW_MASK;
+	aw_dev->en_desc.enable = AW87XXX_EN_SW_ENABLE_VALUE;
+	aw_dev->en_desc.disable = AW87XXX_EN_SW_DISABLE_VALUE;
+
+	if (property->sw_enabled) {
+		aw_dev->mute_desc.addr = AW87XXX_SYSCTRL_REG;
+		aw_dev->mute_desc.mask = AW87XXX_EN_SW_MASK;
+		aw_dev->mute_desc.enable = AW87XXX_EN_SW_DISABLE_VALUE;
+		aw_dev->mute_desc.disable = AW87XXX_EN_SW_ENABLE_VALUE;
+	} else {
+		aw_dev->mute_desc.addr = AW_REG_NONE;
+	}
+
+	if (property->ipeak_enabled) {
+		aw_dev->ipeak_desc.reg = AW87XXX_BSTCTRL_REG;
+		aw_dev->ipeak_desc.mask = AW87XXX_BST_IPEAK_MASK;
+	} else {
+		aw_dev->ipeak_desc.reg = AW_REG_NONE;
+	}
+
+	if (property->vol_enabled) {
+		aw_dev->vol_desc.addr = AW87XXX_CPOVP_REG;
+		aw_dev->vol_desc.mask = AW87XXX_CP_OVP_MASK;
+		aw_dev->vol_desc.start = AW87XXX_CP_OVP_START;
+	} else {
+		aw_dev->vol_desc.addr = AW_REG_NONE;
+	}
+
+	if (property->auth_enabled) {
+		aw_dev->auth_desc.reg_in_l = AW87XXX_VCINL_REG;
+		aw_dev->auth_desc.reg_in_h = AW87XXX_VCINH_REG;
+		aw_dev->auth_desc.reg_out_l = AW87XXX_VCOUTL_REG;
+		aw_dev->auth_desc.reg_out_h = AW87XXX_VCOUTH_REG;
+	} else {
+		aw_dev_auth_reg_none(aw_dev);
+	}
+
+	aw_dev->ef_desc.count = 2;
+	aw_dev->ef_desc.sequence[0].reg = AW87XXX_EFRH1_REG;
+	aw_dev->ef_desc.sequence[0].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[0].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+	aw_dev->ef_desc.sequence[1].reg = AW87XXX_EFRL1_REG;
+	aw_dev->ef_desc.sequence[1].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[1].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	aw_dev_check_product(aw_dev, &property->mark_desc, property->product, property->product_cnt);
+
+	return ret;
+}
 
 /********************** aw87xxx_pid_9A attributes ***************************/
 
@@ -800,11 +1040,14 @@ static int aw_dev_pid_9b_pwr_on(struct aw_device *aw_dev, struct aw_data_contain
 	return 0;
 }
 
-static void aw_dev_pid_9b_init(struct aw_device *aw_dev)
+static int aw_dev_pid_9b_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_9B_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_9b_reg_access;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
 
 	aw_dev->mute_desc.addr = AW87XXX_PID_9B_SYSCTRL_REG;
 	aw_dev->mute_desc.mask = AW87XXX_PID_9B_REG_EN_SW_MASK;
@@ -812,16 +1055,14 @@ static void aw_dev_pid_9b_init(struct aw_device *aw_dev)
 	aw_dev->mute_desc.disable = AW87XXX_PID_9B_REG_EN_SW_ENABLE_VALUE;
 	aw_dev->ops.pwr_on_func = aw_dev_pid_9b_pwr_on;
 
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_9b_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_9b_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
-
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_DISENABLE;
 
 	aw_dev->product_tab = g_aw_pid_9b_product;
-	aw_dev->product_cnt = AW87XXX_PID_9B_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_9b_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_9B_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_9B_POWER_OFF_DELAY_MS;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_9B_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_9B_SPK_MODE_ENABLE;
@@ -832,9 +1073,17 @@ static void aw_dev_pid_9b_init(struct aw_device *aw_dev)
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_9B_SYSCTRL_REG;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_9B_SYSCTRL_DEFAULT;
 
+	aw_dev->ipeak_desc.reg = AW_REG_NONE;
+
 	aw_dev->vol_desc.addr = AW_REG_NONE;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 
 static int aw_dev_pid_9a_init(struct aw_device *aw_dev)
@@ -868,53 +1117,28 @@ static int aw_dev_pid_9a_init(struct aw_device *aw_dev)
 /********************** aw87xxx_pid_9b attributes end ***********************/
 
 /********************** aw87xxx_pid_18 attributes ***************************/
-static int aw_dev_pid_18_pwr_on(struct aw_device *aw_dev, struct aw_data_container *data)
+static int aw_dev_pid_18_init(struct aw_device *aw_dev)
 {
 	int ret = 0;
 
-	/*hw power on*/
-	aw87xxx_dev_hw_pwr_ctrl(aw_dev, true);
-
-	/* open the mute */
-	ret = aw87xxx_dev_mute_ctrl(aw_dev, true);
-	if (ret < 0)
-		return ret;
-
-	/* Update scene parameters in mute mode */
-	ret = aw87xxx_dev_reg_update_mute(aw_dev, data);
-	if (ret < 0)
-		return ret;
-
-	/* close the mute */
-	ret = aw87xxx_dev_mute_ctrl(aw_dev, false);
-	if (ret < 0)
-		return ret;
-
-	return 0;
-}
-
-static void aw_dev_chipid_18_init(struct aw_device *aw_dev)
-{
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_18_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_18_reg_access;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
 
 	aw_dev->mute_desc.addr = AW87XXX_PID_18_SYSCTRL_REG;
 	aw_dev->mute_desc.mask = AW87XXX_PID_18_REG_EN_SW_MASK;
 	aw_dev->mute_desc.enable = AW87XXX_PID_18_REG_EN_SW_DISABLE_VALUE;
 	aw_dev->mute_desc.disable = AW87XXX_PID_18_REG_EN_SW_ENABLE_VALUE;
-	aw_dev->ops.pwr_on_func = aw_dev_pid_18_pwr_on;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_18_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_18_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_18_product;
-	aw_dev->product_cnt = AW87XXX_PID_18_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_18_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_18_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_18_POWER_OFF_DELAY_MS;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_18_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_18_REG_REC_MODE_DISABLE;
@@ -924,31 +1148,43 @@ static void aw_dev_chipid_18_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_18_CLASSD_REG;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_18_CLASSD_DEFAULT;
+
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
 
 	aw_dev->vol_desc.addr = AW87XXX_PID_18_CPOC_REG;
+	aw_dev->vol_desc.mask = AW87XXX_CP_OVP_MASK;
+	aw_dev->vol_desc.start = AW87XXX_CP_OVP_START;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************** aw87xxx_pid_18 attributes end ***********************/
 
 /********************** aw87xxx_pid_39 attributes ***************************/
-static void aw_dev_chipid_39_init(struct aw_device *aw_dev)
+static int aw_dev_pid_39_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_39_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_39_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_39_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_39_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_39_product;
-	aw_dev->product_cnt = AW87XXX_PID_39_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_39_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_39_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_39_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_39_REG_MODECTRL;
 	aw_dev->rec_desc.disable = AW87XXX_PID_39_REC_MODE_DISABLE;
@@ -958,32 +1194,44 @@ static void aw_dev_chipid_39_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_39_REG_MODECTRL;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_39_MODECTRL_DEFAULT;
+
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
 
 	aw_dev->vol_desc.addr = AW87XXX_PID_39_REG_CPOVP;
+	aw_dev->vol_desc.mask = AW87XXX_CP_OVP_MASK;
+	aw_dev->vol_desc.start = AW87XXX_CP_OVP_START;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************* aw87xxx_pid_39 attributes end *************************/
 
 
-/********************* aw87xxx_pid_59_5x9 attributes *************************/
-static void aw_dev_chipid_59_5x9_init(struct aw_device *aw_dev)
+/********************* aw87xxx_pid_59 attributes *************************/
+static int aw_dev_pid_59_5x9_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_59_5X9_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_59_5x9_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_59_5x9_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_59_5x9_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_59_5x9_product;
-	aw_dev->product_cnt = AW87XXX_PID_59_5X9_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_59_5x9_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_59_5X9_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_59_5X9_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_59_5X9_REG_SYSCTRL;
 	aw_dev->rec_desc.disable = AW87XXX_PID_59_5X9_REC_MODE_DISABLE;
@@ -993,31 +1241,39 @@ static void aw_dev_chipid_59_5x9_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_59_5X9_REG_ENCR;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_59_5X9_ENCRY_DEFAULT;
+
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
 
 	aw_dev->vol_desc.addr = AW_REG_NONE;
 
 	aw_dev_auth_reg_none(aw_dev);
-}
-/******************* aw87xxx_pid_59_5x9 attributes end ***********************/
 
-/********************* aw87xxx_pid_59_3x9 attributes *************************/
-static void aw_dev_chipid_59_3x9_init(struct aw_device *aw_dev)
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
+}
+
+static int aw_dev_pid_59_3x9_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_59_3X9_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_59_3x9_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_59_3x9_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_59_3x9_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_59_3x9_product;
-	aw_dev->product_cnt = AW87XXX_PID_59_3X9_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_59_3x9_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_59_3X9_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_59_3X9_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_59_3X9_REG_MDCRTL;
 	aw_dev->rec_desc.disable = AW87XXX_PID_59_3X9_SPK_MODE_ENABLE;
@@ -1027,31 +1283,55 @@ static void aw_dev_chipid_59_3x9_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_59_3X9_REG_ENCR;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_59_3X9_ENCR_DEFAULT;
+
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
 
 	aw_dev->vol_desc.addr = AW87XXX_PID_59_3X9_REG_CPOVP;
+	aw_dev->vol_desc.mask = AW87XXX_CP_OVP_MASK;
+	aw_dev->vol_desc.start = AW87XXX_CP_OVP_START;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
-/******************* aw87xxx_pid_59_3x9 attributes end ***********************/
+
+static int aw_dev_pid_59_init(struct aw_device *aw_dev)
+{
+	int ret = 0;
+
+	if (aw87xxx_dev_gpio_is_valid(aw_dev))
+		ret = aw_dev_pid_59_5x9_init(aw_dev);
+	else
+		ret = aw_dev_pid_59_3x9_init(aw_dev);
+
+	return ret;
+}
+/******************* aw87xxx_pid_59 attributes end ***********************/
 
 /********************** aw87xxx_pid_5a attributes ****************************/
-static void aw_dev_chipid_5a_init(struct aw_device *aw_dev)
+static int aw_dev_pid_5a_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_5A_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_5a_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_5a_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_5a_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* Whether to allow register operation to power off */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_5a_product;
-	aw_dev->product_cnt = AW87XXX_PID_5A_PRODUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_5a_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_5A_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_5A_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_5A_REG_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_5A_REG_RCV_MODE_DISABLE;
@@ -1061,32 +1341,42 @@ static void aw_dev_chipid_5a_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_5A_REG_DFT3R_REG;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_5A_DFT3R_DEFAULT;
+
 	aw_dev->ipeak_desc.reg = AW87XXX_PID_5A_REG_BSTCPR2_REG;
 	aw_dev->ipeak_desc.mask = AW87XXX_PID_5A_REG_BST_IPEAK_MASK;
 
 	aw_dev->vol_desc.addr = AW_REG_NONE;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************** aw87xxx_pid_5a attributes end ************************/
 
 /********************** aw87xxx_pid_76 attributes ****************************/
-static void aw_dev_chipid_76_init(struct aw_device *aw_dev)
+static int aw_dev_pid_76_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_76_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_76_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_76_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_76_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* software power off control info */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_76_product;
-	aw_dev->product_cnt = AW87XXX_PID_76_PROFUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_76_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_76_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_76_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_76_MDCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_76_EN_SPK_ENABLE;
@@ -1096,31 +1386,43 @@ static void aw_dev_chipid_76_init(struct aw_device *aw_dev)
 	/* esd reg info */
 	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_76_DFT_ADP1_REG;
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_76_DFT_ADP1_CHECK;
+
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
 
 	aw_dev->vol_desc.addr = AW87XXX_PID_76_CPOVP_REG;
+	aw_dev->vol_desc.mask = AW87XXX_CP_OVP_MASK;
+	aw_dev->vol_desc.start = AW87XXX_CP_OVP_START;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************** aw87xxx_pid_76 attributes end ************************/
 
 /********************** aw87xxx_pid_60 attributes ****************************/
-static void aw_dev_chipid_60_init(struct aw_device *aw_dev)
+static int aw_dev_pid_60_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_60_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_60_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_60_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_60_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* software power off control info */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_60_product;
-	aw_dev->product_cnt = AW87XXX_PID_60_PROFUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_60_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_60_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_60_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_60_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_60_RCV_MODE_DISABLE;
@@ -1132,29 +1434,42 @@ static void aw_dev_chipid_60_init(struct aw_device *aw_dev)
 	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_60_ESD_REG_VAL;
 
 	aw_dev->ipeak_desc.reg = AW_REG_NONE;
+
 	aw_dev->vol_desc.addr = AW_REG_NONE;
 
 	aw_dev_auth_reg_none(aw_dev);
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************** aw87xxx_pid_60 attributes end ************************/
 
 /********************** aw87xxx_pid_c1 attributes ****************************/
-static void aw_dev_chipid_c1_init(struct aw_device *aw_dev)
+static int aw_dev_pid_c1_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_C1_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_c1_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_c1_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_c1_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* software power off control info */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_c1_product;
-	aw_dev->product_cnt = AW87XXX_PID_C1_PROFUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_c1_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_C1_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_C1_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW87XXX_PID_C1_SYSCTRL_REG;
+	aw_dev->en_desc.disable = AW87XXX_PID_C1_EN_SE_DISABLE_VALUE;
+	aw_dev->en_desc.enable = AW87XXX_PID_C1_EN_SE_ENABLE_VALUE;
+	aw_dev->en_desc.mask = AW87XXX_PID_C1_EN_SW_MASK;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_C1_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_C1_EN_SPK_SPK_MODE_ENABLE;
@@ -1174,26 +1489,46 @@ static void aw_dev_chipid_c1_init(struct aw_device *aw_dev)
 	aw_dev->auth_desc.reg_in_h = AW87XXX_PID_C1_TESTIN2_REG;
 	aw_dev->auth_desc.reg_out_l = AW87XXX_PID_C1_TESTOUT1_REG;
 	aw_dev->auth_desc.reg_out_h = AW87XXX_PID_C1_TESTOUT2_REG;
+
+	aw_dev->ef_desc.count = 2;
+	aw_dev->ef_desc.sequence[0].reg = AW87XXX_PID_C1_EFRH2_REG;
+	aw_dev->ef_desc.sequence[0].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[0].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+	aw_dev->ef_desc.sequence[1].reg = AW87XXX_PID_C1_EFRL2_REG;
+	aw_dev->ef_desc.sequence[1].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[1].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
 }
 /********************** aw87xxx_pid_c1 attributes end ************************/
 
 /********************** aw87xxx_pid_c2 attributes ****************************/
-static void aw_dev_chipid_c2_init(struct aw_device *aw_dev)
+static int aw_dev_pid_c2_init(struct aw_device *aw_dev)
 {
+	int ret = 0;
+	uint8_t reg_val;
+	struct aw_mark_desc mark;
+
 	/* Product register permission info */
 	aw_dev->reg_max_addr = AW87XXX_PID_C2_REG_MAX;
-	aw_dev->reg_access = aw87xxx_pid_c2_reg_access;
-
-	/* software reset control info */
-	aw_dev->soft_rst_desc.len = sizeof(aw87xxx_pid_c2_softrst_access);
-	aw_dev->soft_rst_desc.access = aw87xxx_pid_c2_softrst_access;
-	aw_dev->soft_rst_enable = AW_DEV_SOFT_RST_ENABLE;
 
 	/* software power off control info */
 	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
 
 	aw_dev->product_tab = g_aw_pid_c2_product;
-	aw_dev->product_cnt = AW87XXX_PID_C2_PROFUCT_MAX;
+	aw_dev->product_cnt = sizeof(g_aw_pid_c2_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_C2_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_C2_POWER_OFF_DELAY_MS;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
+
+	aw_dev->en_desc.addr = AW87XXX_PID_C2_SYSCTRL_REG;
+	aw_dev->en_desc.disable = AW87XXX_PID_C2_EN_SW_DISABLE_VALUE;
+	aw_dev->en_desc.enable = AW87XXX_PID_C2_EN_SW_ENABLE_VALUE;
+	aw_dev->en_desc.mask = AW87XXX_PID_C2_EN_SW_MASK;
 
 	aw_dev->rec_desc.addr = AW87XXX_PID_C2_SYSCTRL_REG;
 	aw_dev->rec_desc.disable = AW87XXX_PID_C2_RCV_MODE_DISABLE;
@@ -1214,62 +1549,174 @@ static void aw_dev_chipid_c2_init(struct aw_device *aw_dev)
 	aw_dev->auth_desc.reg_in_h = AW87XXX_PID_C2_TESTIN2_REG;
 	aw_dev->auth_desc.reg_out_l = AW87XXX_PID_C2_CRCOUT0_REG;
 	aw_dev->auth_desc.reg_out_h = AW87XXX_PID_C2_CRCOUT1_REG;
+
+	aw_dev->ef_desc.count = 2;
+	aw_dev->ef_desc.sequence[0].reg = AW87XXX_PID_C2_EFRHH_REG;
+	aw_dev->ef_desc.sequence[0].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[0].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+	aw_dev->ef_desc.sequence[1].reg = AW87XXX_PID_C2_EFRHL_REG;
+	aw_dev->ef_desc.sequence[1].mask = AW87XXX_EF_LOCK_MASK;
+	aw_dev->ef_desc.sequence[1].check_val = AW87XXX_EF_LOCK_ENABLE_VALUE;
+
+	mark.addr = AW87XXX_PID_C2_EFRHH_REG;
+	mark.start = AW87XXX_PID_C2_EF_VERSION_ID_START_BIT;
+	mark.mask = AW87XXX_PID_C2_EF_VERSION_ID_MASK;
+	reg_val = aw_dev_check_product(
+		aw_dev, &mark, g_aw_pid_c2_product_tab, sizeof(g_aw_pid_c2_product_tab) / sizeof(struct aw_product_tab));
+	// if (reg_val == AW87XXX_PID_C2_CM_VOLT_MARK) {
+	// 	aw_dev->cm_volt_desc.addr = AW87XXX_PID_C2_AGC3PA_REG;
+	// 	aw_dev->cm_volt_desc.mask = (uint8_t)AW87XXX_PID_C2_LPVTH_MASK;
+	// 	aw_dev->cm_volt_desc.init = 0;
+	// 	aw_dev->cm_volt_desc.adjust = AW87XXX_PID_C2_LPVTH_ADJUST_VALUE;
+	// 	aw_dev->cm_volt_desc.threshold = AW87XXX_PID_C2_LPVTH_THRESHOLD;
+	// } else {
+		aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+	// }
+
+	ret = aw87xxx_dev_i2c_read_byte(aw_dev, AW87XXX_PID_C2_VERSION_REG, &reg_val);
+	if (ret < 0)
+		return ret;
+
+	reg_val = (reg_val & (~AW87XXX_PID_C2_VERSION_MASK)) >> AW87XXX_PID_C2_VERSION_START_BIT;
+	aw_dev->version = reg_val;
+	AW_DEV_LOGI(aw_dev->dev, "read c2 version = 0x%x ",reg_val);
+
+	return ret;
 }
 /********************** aw87xxx_pid_c2 attributes end ************************/
 
+/********************** aw87xxx_pid_23 attributes ****************************/
+static int aw_dev_pid_23_init(struct aw_device *aw_dev)
+{
+	int ret = 0;
+
+	/* Product register permission info */
+	aw_dev->reg_max_addr = AW87XXX_PID_23_REG_MAX;
+
+	/* software power off control info */
+	aw_dev->soft_off_enable = AW_DEV_SOFT_OFF_ENABLE;
+
+	aw_dev->product_tab = g_aw_pid_23_product;
+	aw_dev->product_cnt = sizeof(g_aw_pid_23_product) / sizeof(char *);
+
+	aw_dev->delay_desc.power_on_delay_ms = AW87XXX_PID_23_POWER_ON_DELAY_MS;
+	aw_dev->delay_desc.power_off_delay_ms = AW87XXX_PID_23_POWER_OFF_DELAY_MS;
+
+	aw_dev->en_desc.addr = AW_REG_NONE;
+
+	aw_dev->mute_desc.addr = AW_REG_NONE;
+
+	aw_dev->rec_desc.addr = AW87XXX_PID_23_SYSCTRL_REG;
+	aw_dev->rec_desc.disable = AW87XXX_PID_23_EN_SPK_ENABLE;
+	aw_dev->rec_desc.enable = AW87XXX_PID_23_EN_SPK_DISABLE;
+	aw_dev->rec_desc.mask = AW87XXX_PID_23_EN_SPK_MASK;
+
+	/* esd reg info */
+	aw_dev->esd_desc.first_update_reg_addr = AW87XXX_PID_23_ESD_REG;
+	aw_dev->esd_desc.first_update_reg_val = AW87XXX_PID_23_ESD_CHECK;
+
+	aw_dev->ipeak_desc.reg = AW_REG_NONE;
+
+	aw_dev->vol_desc.addr = AW_REG_NONE;
+
+	/*encryption info*/
+	aw_dev->auth_desc.reg_in_l = AW87XXX_VCINL_REG;
+	aw_dev->auth_desc.reg_in_h = AW87XXX_VCINH_REG;
+	aw_dev->auth_desc.reg_out_l = AW87XXX_VCOUTL_REG;
+	aw_dev->auth_desc.reg_out_h = AW87XXX_VCOUTH_REG;
+
+	aw_dev->ef_desc.count = 0;
+
+	aw_dev->cm_volt_desc.addr = AW_REG_NONE;
+
+	return ret;
+}
+/********************** aw87xxx_pid_23 attributes end ************************/
+
+const struct aw_dev_property g_aw_dev_property_registry[] = {
+	{
+		.id = AW_DEV_CHIPID_9A,
+		.dev_init_func = aw_dev_pid_9a_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_9B,
+		.dev_init_func = aw_dev_pid_9b_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_18,
+		.dev_init_func = aw_dev_pid_18_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_39,
+		.dev_init_func = aw_dev_pid_39_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_59,
+		.dev_init_func = aw_dev_pid_59_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_5A,
+		.dev_init_func = aw_dev_pid_5a_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_76,
+		.dev_init_func = aw_dev_pid_76_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_60,
+		.dev_init_func = aw_dev_pid_60_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_C1,
+		.dev_init_func = aw_dev_pid_c1_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_C2,
+		.dev_init_func = aw_dev_pid_c2_init,
+	},
+	{
+		.id = AW_DEV_CHIPID_23,
+		.dev_init_func = aw_dev_pid_23_init,
+	},
+};
+
+static int aw_dev_check_chip_model(struct aw_device *aw_dev)
+{
+	int ret = 0;
+	int i = 0;
+
+	for (i = 0; i < sizeof(g_aw_dev_property_registry) / sizeof(struct aw_dev_property); i++) {
+		if (aw_dev->chipid == g_aw_dev_property_registry[i].id) {
+			if (g_aw_dev_property_registry[i].dev_init_func != NULL)
+				ret = g_aw_dev_property_registry[i].dev_init_func(aw_dev);
+			else
+				ret = aw87xxx_dev_common_init(aw_dev, &g_aw_dev_property_registry[i]);
+
+			if (ret < 0)
+				AW_DEV_LOGE(aw_dev->dev, "product is pid_%x init failed",
+					g_aw_dev_property_registry[i].id);
+			else
+				AW_DEV_LOGI(aw_dev->dev, "product is pid_%x class",
+					g_aw_dev_property_registry[i].id);
+
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 static int aw_dev_chip_init(struct aw_device *aw_dev)
 {
-	int ret  = 0;
+	int ret = 0;
 
-	/*get info by chipid*/
-	switch (aw_dev->chipid) {
-	case AW_DEV_CHIPID_9A:
-		ret = aw_dev_pid_9a_init(aw_dev);
-		if (ret < 0)
-			AW_DEV_LOGE(aw_dev->dev, "product is pid_9B init failed");
-		break;
-	case AW_DEV_CHIPID_9B:
-		aw_dev_pid_9b_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_9B class");
-		break;
-	case AW_DEV_CHIPID_18:
-		aw_dev_chipid_18_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_18 class");
-		break;
-	case AW_DEV_CHIPID_39:
-		aw_dev_chipid_39_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_39 class");
-		break;
-	case AW_DEV_CHIPID_59:
-		if (aw87xxx_dev_gpio_is_valid(aw_dev)) {
-			aw_dev_chipid_59_5x9_init(aw_dev);
-			AW_DEV_LOGI(aw_dev->dev, "product is pid_59_5x9 class");
-		} else {
-			aw_dev_chipid_59_3x9_init(aw_dev);
-			AW_DEV_LOGI(aw_dev->dev, "product is pid_59_3x9 class");
-		}
-		break;
-	case AW_DEV_CHIPID_5A:
-		aw_dev_chipid_5a_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_5A class");
-		break;
-	case AW_DEV_CHIPID_76:
-		aw_dev_chipid_76_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_76 class");
-		break;
-	case AW_DEV_CHIPID_60:
-		aw_dev_chipid_60_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_60 class");
-		break;
-	case AW_DEV_CHIPID_C1:
-		aw_dev_chipid_c1_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_c1 class");
-		break;
-	case AW_DEV_CHIPID_C2:
-		aw_dev_chipid_c2_init(aw_dev);
-		AW_DEV_LOGI(aw_dev->dev, "product is pid_c2 class");
-		break;
-	default:
+	ret = aw_dev_check_chip_model(aw_dev);
+	if (ret == 0)
+		return 0;
+
+	aw_dev->chipid &= 0xFF;
+	ret = aw_dev_check_chip_model(aw_dev);
+	if (ret < 0) {
 		AW_DEV_LOGE(aw_dev->dev, "unsupported device revision [0x%x]",
 			aw_dev->chipid);
 		return -EINVAL;
@@ -1282,43 +1729,88 @@ static int aw87xxx_dev_get_chipid(struct aw_device *aw_dev)
 {
 	int ret = -1;
 	unsigned int cnt = 0;
-	unsigned char reg_val = 0;
+	unsigned char reg_val_l = 0;
+	unsigned char reg_val_h = 0;
 
 	for (cnt = 0; cnt < AW_READ_CHIPID_RETRIES; cnt++) {
-		ret = aw87xxx_dev_i2c_read_byte(aw_dev, AW_DEV_REG_CHIPID, &reg_val);
+		ret = aw87xxx_dev_i2c_read_byte(aw_dev, AW87XXX_CHIPIDL_REG, &reg_val_l);
 		if (ret < 0) {
-			AW_DEV_LOGE(aw_dev->dev, "[%d] read chip is failed, ret=%d",
+			AW_DEV_LOGE(aw_dev->dev, "[%d] read low id is failed, ret=%d",
 				cnt, ret);
 			continue;
 		}
 		break;
 	}
-
-
 	if (cnt == AW_READ_CHIPID_RETRIES) {
-		AW_DEV_LOGE(aw_dev->dev, "read chip is failed,cnt=%d", cnt);
+		AW_DEV_LOGE(aw_dev->dev, "read low id is failed");
 		return -EINVAL;
 	}
 
-	AW_DEV_LOGI(aw_dev->dev, "read chipid[0x%x] succeed", reg_val);
-	aw_dev->chipid = reg_val;
+	for (cnt = 0; cnt < AW_READ_CHIPID_RETRIES; cnt++) {
+		ret = aw87xxx_dev_i2c_read_byte(aw_dev, AW87XXX_CHIPIDH_REG, &reg_val_h);
+		if (ret < 0) {
+			AW_DEV_LOGE(aw_dev->dev, "[%d] read high id is failed, ret=%d",
+				cnt, ret);
+			continue;
+		}
+		break;
+	}
+	if (cnt == AW_READ_CHIPID_RETRIES) {
+		AW_DEV_LOGE(aw_dev->dev, "read high id is failed");
+		return -EINVAL;
+	}
+
+	aw_dev->chipid = (int)reg_val_l | (int)reg_val_h << 8;
+	AW_DEV_LOGI(aw_dev->dev, "read chipid[0x%x] succeed", aw_dev->chipid);
+
+	return 0;
+}
+
+static int aw87xxx_dev_check_ef_lock(struct aw_device *aw_dev)
+{
+	struct aw_ef_desc *ef_desc = &aw_dev->ef_desc;
+	unsigned int i = 0;
+	unsigned char reg_val = 0;
+
+	if (!ef_desc->count)
+		return 0;
+
+	if (aw_dev->en_desc.addr != AW_REG_NONE) {
+		aw87xxx_dev_i2c_write_bits(aw_dev, aw_dev->en_desc.addr, aw_dev->en_desc.mask, aw_dev->en_desc.enable);
+		mdelay(1);
+	}
+
+	for (i = 0; i < ef_desc->count; i++) {
+		aw87xxx_dev_i2c_read_byte(aw_dev, ef_desc->sequence[i].reg, &reg_val);
+		if ((reg_val & (~ef_desc->sequence[i].mask)) != ef_desc->sequence[i].check_val)
+			AW_DEV_LOGD(aw_dev->dev, "ef check failed: 0x%x=0x%x", ef_desc->sequence[i].reg, reg_val);
+	}
+
+	if (aw_dev->en_desc.addr != AW_REG_NONE)
+		aw87xxx_dev_i2c_write_bits(aw_dev, aw_dev->en_desc.addr, aw_dev->en_desc.mask, aw_dev->en_desc.disable);
 
 	return 0;
 }
 
 int aw87xxx_dev_init(struct aw_device *aw_dev)
 {
-	int ret = -1;
+	int ret = 0;
 
 	ret = aw87xxx_dev_get_chipid(aw_dev);
 	if (ret < 0) {
-		AW_DEV_LOGE(aw_dev->dev, "read chipid is failed,ret=%d", ret);
+		AW_DEV_LOGE(aw_dev->dev, "read chipid is failed, ret=%d", ret);
 		return ret;
 	}
 
 	ret = aw_dev_chip_init(aw_dev);
+	if (ret < 0)
+		return ret;
+
+	ret = aw87xxx_dev_check_ef_lock(aw_dev);
+	if (ret < 0) {
+		AW_DEV_LOGE(aw_dev->dev, "ef has not been locked");
+		return ret;
+	}
 
 	return ret;
 }
-
-

@@ -1,8 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0
- *
+// SPDX-License-Identifier: GPL-2.0
+/*
  * aw87xxx_device.h  aw87xxx pa module
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -12,25 +12,16 @@
  * option) any later version.
  *
  */
-
 #ifndef __AW87XXX_DEVICE_H__
 #define __AW87XXX_DEVICE_H__
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <sound/control.h>
 #include <sound/soc.h>
+#include "aw87xxx_platform.h"
 #include "aw87xxx_acf_bin.h"
 
-#define AW87XXX_PID_9B_PRODUCT_MAX	(2)
-#define AW87XXX_PID_18_PRODUCT_MAX	(2)
-#define AW87XXX_PID_39_PRODUCT_MAX	(6)
-#define AW87XXX_PID_59_3X9_PRODUCT_MAX	(4)
-#define AW87XXX_PID_59_5X9_PRODUCT_MAX	(8)
-#define AW87XXX_PID_5A_PRODUCT_MAX	(12)
-#define AW87XXX_PID_76_PROFUCT_MAX	(10)
-#define AW87XXX_PID_60_PROFUCT_MAX	(10)
-#define AW87XXX_PID_C1_PROFUCT_MAX	(4)
-#define AW87XXX_PID_C2_PROFUCT_MAX	(10)
+// #define AW_DTC_ENABLE
 
 #define AW_PRODUCT_NAME_LEN		(8)
 
@@ -43,7 +34,6 @@
 
 #define AW_READ_CHIPID_RETRIES		(5)
 #define AW_READ_CHIPID_RETRY_DELAY	(2)
-#define AW_DEV_REG_CHIPID		(0x00)
 
 #define AW_DEV_REG_INVALID_MASK		(0xff)
 
@@ -57,6 +47,331 @@
 #define AW_BOOST_VOLTAGE_MIN		(0x00)
 
 #define AW_REG_NONE		(0xFF)
+
+#define AW_LOCK_SEQUENCE_MAX (2)
+
+/********************************************
+ *
+ * aw87xxx register attributes
+ *
+ *******************************************/
+#define AW87XXX_CHIPIDL_REG (0x00)
+#define AW87XXX_SW_RESET_PASSWORD (0xAA)
+#define AW87XXX_CHIPIDH_REG (0x01)
+#define AW87XXX_SYSCTRL_REG (0x04)
+#define AW87XXX_EN_RCV_START (7)
+#define AW87XXX_EN_RCV_LEN (1)
+#define AW87XXX_EN_RCV_MASK \
+	(~(((1 << AW87XXX_EN_RCV_LEN) - 1) << AW87XXX_EN_RCV_START))
+#define AW87XXX_EN_RCV_DISABLE (0)
+#define AW87XXX_EN_RCV_ENABLE (1)
+#define AW87XXX_EN_SW_START (6)
+#define AW87XXX_EN_SW_LEN (1)
+#define AW87XXX_EN_SW_MASK \
+	(~(((1 << AW87XXX_EN_SW_LEN) - 1) << AW87XXX_EN_SW_START))
+#define AW87XXX_EN_SW_DISABLE (0)
+#define AW87XXX_EN_SW_DISABLE_VALUE \
+	(AW87XXX_EN_SW_DISABLE << AW87XXX_EN_SW_START)
+#define AW87XXX_EN_SW_ENABLE (1)
+#define AW87XXX_EN_SW_ENABLE_VALUE \
+	(AW87XXX_EN_SW_ENABLE << AW87XXX_EN_SW_START)
+#define AW87XXX_CPOVP_REG (0x05)
+#define AW87XXX_CP_OVP_START (0)
+#define AW87XXX_CP_OVP_LEN (4)
+#define AW87XXX_CP_OVP_MASK \
+	(~(((1 << AW87XXX_CP_OVP_LEN) - 1) << AW87XXX_CP_OVP_START))
+#define AW87XXX_BSTCTRL_REG (0x06)
+#define AW87XXX_BST_IPEAK_START (0)
+#define AW87XXX_BST_IPEAK_LEN (4)
+#define AW87XXX_BST_IPEAK_MASK \
+	(~(((1 << AW87XXX_BST_IPEAK_LEN) - 1) << AW87XXX_BST_IPEAK_START))
+#define AW87XXX_ESD_REG (0x64)
+#define AW87XXX_EFRH1_REG (0x70)
+#define AW87XXX_EFRL1_REG (0x71)
+#define AW87XXX_EF_LOCK_STRAT_BIT (7)
+#define AW87XXX_EF_LOCK_BITS_LEN (1)
+#define AW87XXX_EF_LOCK_MASK \
+	(~(((1 << AW87XXX_EF_LOCK_BITS_LEN) - 1) << AW87XXX_EF_LOCK_STRAT_BIT))
+#define AW87XXX_EF_LOCK_ENABLE (1)
+#define AW87XXX_EF_LOCK_ENABLE_VALUE \
+	(AW87XXX_EF_LOCK_ENABLE << AW87XXX_EF_LOCK_STRAT_BIT)
+#define AW87XXX_VCINL_REG (0x7C)
+#define AW87XXX_VCINH_REG (0x7D)
+#define AW87XXX_VCOUTL_REG (0x7E)
+#define AW87XXX_VCOUTH_REG (0x7F)
+
+#define AW87XXX_PID_9B_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_9B_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_9B_REG_MAX (0x63)
+#define AW87XXX_PID_9B_SYSCTRL_DEFAULT (0x03)
+#define AW87XXX_PID_9B_SYSCTRL_REG (0x01)
+#define AW87XXX_PID_9B_SPK_MODE_START_BIT (0)
+#define AW87XXX_PID_9B_SPK_MODE_BITS_LEN (1)
+#define AW87XXX_PID_9B_SPK_MODE_MASK \
+	(~(((1<<AW87XXX_PID_9B_SPK_MODE_BITS_LEN)-1) << AW87XXX_PID_9B_SPK_MODE_START_BIT))
+#define AW87XXX_PID_9B_SPK_MODE_DISABLE	(0)
+#define AW87XXX_PID_9B_SPK_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_9B_SPK_MODE_DISABLE << AW87XXX_PID_9B_SPK_MODE_START_BIT)
+#define AW87XXX_PID_9B_SPK_MODE_ENABLE (1)
+#define AW87XXX_PID_9B_SPK_MODE_ENABLE_VALUE \
+	(AW87XXX_PID_9B_SPK_MODE_ENABLE << AW87XXX_PID_9B_SPK_MODE_START_BIT)
+#define AW87XXX_PID_9B_REG_EN_SW_START_BIT (2)
+#define AW87XXX_PID_9B_REG_EN_SW_BITS_LEN (1)
+#define AW87XXX_PID_9B_REG_EN_SW_MASK \
+	(~(((1<<AW87XXX_PID_9B_REG_EN_SW_BITS_LEN)-1) << AW87XXX_PID_9B_REG_EN_SW_START_BIT))
+#define AW87XXX_PID_9B_REG_EN_SW_DISABLE (0)
+#define AW87XXX_PID_9B_REG_EN_SW_DISABLE_VALUE \
+	(AW87XXX_PID_9B_REG_EN_SW_DISABLE << AW87XXX_PID_9B_REG_EN_SW_START_BIT)
+#define AW87XXX_PID_9B_REG_EN_SW_ENABLE (1)
+#define AW87XXX_PID_9B_REG_EN_SW_ENABLE_VALUE \
+	(AW87XXX_PID_9B_REG_EN_SW_ENABLE << AW87XXX_PID_9B_REG_EN_SW_START_BIT)
+#define AW87XXX_PID_9B_ENCRYPTION_REG (0x64)
+#define AW87XXX_PID_9B_ENCRYPTION_BOOST_OUTPUT_SET (0x2C)
+
+#define AW87XXX_PID_18_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_18_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_18_REG_MAX (0x66)
+#define AW87XXX_PID_18_SYSCTRL_REG (0x03)
+#define AW87XXX_PID_18_REG_REC_MODE_START_BIT (1)
+#define AW87XXX_PID_18_REG_REC_MODE_BITS_LEN (1)
+#define AW87XXX_PID_18_REG_REC_MODE_MASK \
+	(~(((1<<AW87XXX_PID_18_REG_REC_MODE_BITS_LEN)-1) << AW87XXX_PID_18_REG_REC_MODE_START_BIT))
+#define AW87XXX_PID_18_REG_REC_MODE_DISABLE	(0)
+#define AW87XXX_PID_18_REG_REC_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_18_REG_REC_MODE_DISABLE << AW87XXX_PID_18_REG_REC_MODE_START_BIT)
+#define AW87XXX_PID_18_REG_REC_MODE_ENABLE (1)
+#define AW87XXX_PID_18_REG_REC_MODE_ENABLE_VALUE \
+	(AW87XXX_PID_18_REG_REC_MODE_ENABLE << AW87XXX_PID_18_REG_REC_MODE_START_BIT)
+#define AW87XXX_PID_18_REG_EN_SW_START_BIT (6)
+#define AW87XXX_PID_18_REG_EN_SW_BITS_LEN (1)
+#define AW87XXX_PID_18_REG_EN_SW_MASK \
+	(~(((1<<AW87XXX_PID_18_REG_EN_SW_BITS_LEN)-1) << AW87XXX_PID_18_REG_EN_SW_START_BIT))
+#define AW87XXX_PID_18_REG_EN_SW_DISABLE (0)
+#define AW87XXX_PID_18_REG_EN_SW_DISABLE_VALUE \
+	(AW87XXX_PID_18_REG_EN_SW_DISABLE << AW87XXX_PID_18_REG_EN_SW_START_BIT)
+#define AW87XXX_PID_18_REG_EN_SW_ENABLE	(1)
+#define AW87XXX_PID_18_REG_EN_SW_ENABLE_VALUE \
+	(AW87XXX_PID_18_REG_EN_SW_ENABLE << AW87XXX_PID_18_REG_EN_SW_START_BIT)
+#define AW87XXX_PID_18_CLASSD_REG (0x05)
+#define AW87XXX_PID_18_CLASSD_DEFAULT (0x10)
+#define AW87XXX_PID_18_CPOC_REG (0x04)
+
+#define AW87XXX_PID_39_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_39_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_39_REG_MAX (0x64)
+#define AW87XXX_PID_39_REG_MODECTRL (0x02)
+#define AW87XXX_PID_39_MODECTRL_DEFAULT (0xa0)
+#define AW87XXX_PID_39_REC_MODE_START_BIT (3)
+#define AW87XXX_PID_39_REC_MODE_BITS_LEN (1)
+#define AW87XXX_PID_39_REC_MODE_MASK \
+	(~(((1<<AW87XXX_PID_39_REC_MODE_BITS_LEN)-1) << AW87XXX_PID_39_REC_MODE_START_BIT))
+#define AW87XXX_PID_39_REC_MODE_DISABLE	(0)
+#define AW87XXX_PID_39_REC_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_39_REC_MODE_DISABLE << AW87XXX_PID_39_REC_MODE_START_BIT)
+#define AW87XXX_PID_39_REC_MODE_ENABLE (1)
+#define AW87XXX_PID_39_REC_MODE_ENABLE_VALUE \
+	(AW87XXX_PID_39_REC_MODE_ENABLE << AW87XXX_PID_39_REC_MODE_START_BIT)
+#define AW87XXX_PID_39_REG_CPOVP (0x03)
+
+#define AW87XXX_PID_59_5X9_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_59_5X9_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_59_5X9_REG_MAX (0x69)
+#define AW87XXX_PID_59_5X9_REG_SYSCTRL (0x01)
+#define AW87XXX_PID_59_5X9_REC_MODE_START_BIT (3)
+#define AW87XXX_PID_59_5X9_REC_MODE_BITS_LEN (1)
+#define AW87XXX_PID_59_5X9_REC_MODE_MASK \
+	(~(((1<<AW87XXX_PID_59_5X9_REC_MODE_BITS_LEN)-1) << AW87XXX_PID_59_5X9_REC_MODE_START_BIT))
+#define AW87XXX_PID_59_5X9_REC_MODE_DISABLE	(0)
+#define AW87XXX_PID_59_5X9_REC_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_59_5X9_REC_MODE_DISABLE << AW87XXX_PID_59_5X9_REC_MODE_START_BIT)
+#define AW87XXX_PID_59_5X9_REC_MODE_ENABLE (1)
+#define AW87XXX_PID_59_5X9_REC_MODE_ENABLE_VALUE	\
+	(AW87XXX_PID_59_5X9_REC_MODE_ENABLE << AW87XXX_PID_59_5X9_REC_MODE_START_BIT)
+#define AW87XXX_PID_59_5X9_REG_ENCR (0x69)
+#define AW87XXX_PID_59_5X9_ENCRY_DEFAULT (0x00)
+
+#define AW87XXX_PID_59_3X9_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_59_3X9_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_59_3X9_REG_MAX (0x70)
+#define AW87XXX_PID_59_3X9_REG_MDCRTL (0x02)
+#define AW87XXX_PID_59_3X9_SPK_MODE_START_BIT (2)
+#define AW87XXX_PID_59_3X9_SPK_MODE_BITS_LEN (1)
+#define AW87XXX_PID_59_3X9_SPK_MODE_MASK \
+	(~(((1<<AW87XXX_PID_59_3X9_SPK_MODE_BITS_LEN)-1) << AW87XXX_PID_59_3X9_SPK_MODE_START_BIT))
+#define AW87XXX_PID_59_3X9_SPK_MODE_DISABLE	(0)
+#define AW87XXX_PID_59_3X9_SPK_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_59_3X9_SPK_MODE_DISABLE << AW87XXX_PID_59_3X9_SPK_MODE_START_BIT)
+#define AW87XXX_PID_59_3X9_SPK_MODE_ENABLE (1)
+#define AW87XXX_PID_59_3X9_SPK_MODE_ENABLE_VALUE	\
+	(AW87XXX_PID_59_3X9_SPK_MODE_ENABLE << AW87XXX_PID_59_3X9_SPK_MODE_START_BIT)
+#define AW87XXX_PID_59_3X9_REG_CPOVP (0x03)
+#define AW87XXX_PID_59_3X9_REG_ENCR (0x70)
+#define AW87XXX_PID_59_3X9_ENCR_DEFAULT (0x00)
+
+#define AW87XXX_PID_5A_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_5A_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_5A_REG_MAX (0x77)
+#define AW87XXX_PID_5A_REG_SYSCTRL_REG (0x01)
+#define AW87XXX_PID_5A_REG_RCV_MODE_START_BIT (2)
+#define AW87XXX_PID_5A_REG_RCV_MODE_BITS_LEN (1)
+#define AW87XXX_PID_5A_REG_RCV_MODE_MASK \
+	(~(((1<<AW87XXX_PID_5A_REG_RCV_MODE_BITS_LEN)-1) << AW87XXX_PID_5A_REG_RCV_MODE_START_BIT))
+#define AW87XXX_PID_5A_REG_RCV_MODE_DISABLE	(0)
+#define AW87XXX_PID_5A_REG_RCV_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_5A_REG_RCV_MODE_DISABLE << AW87XXX_PID_5A_REG_RCV_MODE_START_BIT)
+#define AW87XXX_PID_5A_REG_RCV_MODE_ENABLE (1)
+#define AW87XXX_PID_5A_REG_RCV_MODE_ENABLE_VALUE	\
+	(AW87XXX_PID_5A_REG_RCV_MODE_ENABLE << AW87XXX_PID_5A_REG_RCV_MODE_START_BIT)
+#define AW87XXX_PID_5A_REG_DFT3R_REG (0x62)
+#define AW87XXX_PID_5A_DFT3R_DEFAULT (0x02)
+#define AW87XXX_PID_5A_REG_BSTCPR2_REG (0x05)
+#define AW87XXX_PID_5A_REG_BST_IPEAK_START_BIT (0)
+#define AW87XXX_PID_5A_REG_BST_IPEAK_BITS_LEN (4)
+#define AW87XXX_PID_5A_REG_BST_IPEAK_MASK \
+	(~(((1<<AW87XXX_PID_5A_REG_BST_IPEAK_BITS_LEN)-1) << AW87XXX_PID_5A_REG_BST_IPEAK_START_BIT))
+
+#define AW87XXX_PID_76_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_76_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_76_REG_MAX (0x78)
+#define AW87XXX_PID_76_MDCTRL_REG (0x02)
+#define AW87XXX_PID_76_EN_SPK_START_BIT (2)
+#define AW87XXX_PID_76_EN_SPK_BITS_LEN (1)
+#define AW87XXX_PID_76_EN_SPK_MASK \
+	(~(((1<<AW87XXX_PID_76_EN_SPK_BITS_LEN)-1) << AW87XXX_PID_76_EN_SPK_START_BIT))
+#define AW87XXX_PID_76_EN_SPK_DISABLE (0)
+#define AW87XXX_PID_76_EN_SPK_DISABLE_VALUE	\
+	(AW87XXX_PID_76_EN_SPK_DISABLE << AW87XXX_PID_76_EN_SPK_START_BIT)
+#define AW87XXX_PID_76_EN_SPK_ENABLE (1)
+#define AW87XXX_PID_76_EN_SPK_ENABLE_VALUE	\
+	(AW87XXX_PID_76_EN_SPK_ENABLE << AW87XXX_PID_76_EN_SPK_START_BIT)
+#define AW87XXX_PID_76_CPOVP_REG (0x03)
+#define AW87XXX_PID_76_DFT_ADP1_REG (0x67)
+#define AW87XXX_PID_76_DFT_ADP1_CHECK (0x04)
+
+#define AW87XXX_PID_60_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_60_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_60_REG_MAX (0x7C)
+#define AW87XXX_PID_60_SYSCTRL_REG (0x01)
+#define AW87XXX_PID_60_RCV_MODE_START_BIT (1)
+#define AW87XXX_PID_60_RCV_MODE_BITS_LEN (1)
+#define AW87XXX_PID_60_RCV_MODE_MASK \
+	(~(((1<<AW87XXX_PID_60_RCV_MODE_BITS_LEN)-1) << AW87XXX_PID_60_RCV_MODE_START_BIT))
+#define AW87XXX_PID_60_RCV_MODE_DISABLE	(0)
+#define AW87XXX_PID_60_RCV_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_60_RCV_MODE_DISABLE << AW87XXX_PID_60_RCV_MODE_START_BIT)
+#define AW87XXX_PID_60_RCV_MODE_ENABLE	(1)
+#define AW87XXX_PID_60_RCV_MODE_ENABLE_VALUE \
+	(AW87XXX_PID_60_RCV_MODE_ENABLE << AW87XXX_PID_60_RCV_MODE_START_BIT)
+#define AW87XXX_PID_60_NG3_REG (0x76)
+#define AW87XXX_PID_60_ESD_REG_VAL (0x91)
+
+#define AW87XXX_PID_C1_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_C1_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_C1_REG_MAX (0x7F)
+#define AW87XXX_PID_C1_SYSCTRL_REG (0x01)
+#define AW87XXX_PID_C1_EN_SW_START_BIT (0)
+#define AW87XXX_PID_C1_EN_SW_BITS_LEN (1)
+#define AW87XXX_PID_C1_EN_SW_MASK \
+	(~(((1<<AW87XXX_PID_C1_EN_SW_BITS_LEN)-1) << AW87XXX_PID_C1_EN_SW_START_BIT))
+#define AW87XXX_PID_C1_EN_SE_DISABLE (0)
+#define AW87XXX_PID_C1_EN_SE_DISABLE_VALUE \
+	(AW87XXX_PID_C1_EN_SE_DISABLE << AW87XXX_PID_C1_EN_SW_START_BIT)
+#define AW87XXX_PID_C1_EN_SE_ENABLE (1)
+#define AW87XXX_PID_C1_EN_SE_ENABLE_VALUE	\
+	(AW87XXX_PID_C1_EN_SE_ENABLE << AW87XXX_PID_C1_EN_SW_START_BIT)
+#define AW87XXX_PID_C1_EN_SPK_START_BIT (3)
+#define AW87XXX_PID_C1_EN_SPK_BITS_LEN (1)
+#define AW87XXX_PID_C1_EN_SPK_MASK \
+	(~(((1<<AW87XXX_PID_C1_EN_SPK_BITS_LEN)-1) << AW87XXX_PID_C1_EN_SPK_START_BIT))
+#define AW87XXX_PID_C1_EN_SPK_SPK_MODE_DISABLE (0)
+#define AW87XXX_PID_C1_EN_SPK_SPK_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_C1_EN_SPK_SPK_MODE_DISABLE << AW87XXX_PID_C1_EN_SPK_START_BIT)
+#define AW87XXX_PID_C1_EN_SPK_SPK_MODE_ENABLE (1)
+#define AW87XXX_PID_C1_EN_SPK_SPK_MODE_ENABLE_VALUE	\
+	(AW87XXX_PID_C1_EN_SPK_SPK_MODE_ENABLE << AW87XXX_PID_C1_EN_SPK_START_BIT)
+#define AW87XXX_PID_C1_DFT_THGEN1_REG (0x64)
+#define AW87XXX_PID_C1_DFT_THGEN1_CHECK (0x0a)
+#define AW87XXX_PID_C1_EFRH2_REG (0x76)
+#define AW87XXX_PID_C1_EFRL2_REG (0x78)
+#define AW87XXX_PID_C1_TESTIN1_REG (0x7C)
+#define AW87XXX_PID_C1_TESTIN2_REG (0x7D)
+#define AW87XXX_PID_C1_TESTOUT1_REG (0x7E)
+#define AW87XXX_PID_C1_TESTOUT2_REG (0x7F)
+
+#define AW87XXX_PID_C2_POWER_ON_DELAY_MS (3)
+#define AW87XXX_PID_C2_POWER_OFF_DELAY_MS (5)
+#define AW87XXX_PID_C2_REG_MAX (0x7F)
+#define AW87XXX_PID_C2_CM_VOLT_MARK (3)
+#define AW87XXX_PID_C2_SYSCTRL_REG (0x01)
+#define AW87XXX_PID_C2_RCV_MODE_START_BIT (1)
+#define AW87XXX_PID_C2_RCV_MODE_BITS_LEN (1)
+#define AW87XXX_PID_C2_RCV_MODE_MASK \
+	(~(((1<<AW87XXX_PID_C2_RCV_MODE_BITS_LEN)-1) << AW87XXX_PID_C2_RCV_MODE_START_BIT))
+#define AW87XXX_PID_C2_RCV_MODE_DISABLE	(0)
+#define AW87XXX_PID_C2_RCV_MODE_DISABLE_VALUE \
+	(AW87XXX_PID_C2_RCV_MODE_DISABLE << AW87XXX_PID_C2_RCV_MODE_START_BIT)
+#define AW87XXX_PID_C2_RCV_MODE_ENABLE (1)
+#define AW87XXX_PID_C2_RCV_MODE_ENABLE_VALUE \
+	(AW87XXX_PID_C2_RCV_MODE_ENABLE << AW87XXX_PID_C2_RCV_MODE_START_BIT)
+#define AW87XXX_PID_C2_EN_SW_START_BIT (5)
+#define AW87XXX_PID_C2_EN_SW_BITS_LEN (1)
+#define AW87XXX_PID_C2_EN_SW_MASK \
+	(~(((1<<AW87XXX_PID_C2_EN_SW_BITS_LEN)-1) << AW87XXX_PID_C2_EN_SW_START_BIT))
+#define AW87XXX_PID_C2_EN_SW_DISABLE	(0)
+#define AW87XXX_PID_C2_EN_SW_DISABLE_VALUE \
+	(AW87XXX_PID_C2_EN_SW_DISABLE << AW87XXX_PID_C2_EN_SW_START_BIT)
+#define AW87XXX_PID_C2_EN_SW_ENABLE (1)
+#define AW87XXX_PID_C2_EN_SW_ENABLE_VALUE \
+	(AW87XXX_PID_C2_EN_SW_ENABLE << AW87XXX_PID_C2_EN_SW_START_BIT)
+#define AW87XXX_PID_C2_PEAKLIMIT_REG (0x03)
+#define AW87XXX_PID_C2_BST_IPEAK_START_BIT (0)
+#define AW87XXX_PID_C2_BST_IPEAK_BITS_LEN (4)
+#define AW87XXX_PID_C2_BST_IPEAK_MASK \
+	(~(((1<<AW87XXX_PID_C2_BST_IPEAK_BITS_LEN)-1) << AW87XXX_PID_C2_BST_IPEAK_START_BIT))
+#define AW87XXX_PID_C2_AGC3PA_REG (0x08)
+#define AW87XXX_PID_C2_LPVTH_BIT (5)
+#define AW87XXX_PID_C2_LPVTH_LEN (3)
+#define AW87XXX_PID_C2_LPVTH_MASK \
+	(~(((1<<AW87XXX_PID_C2_LPVTH_LEN)-1) << AW87XXX_PID_C2_LPVTH_BIT))
+#define AW87XXX_PID_C2_LPVTH_ADJUST (4)
+#define AW87XXX_PID_C2_LPVTH_ADJUST_VALUE \
+	(AW87XXX_PID_C2_LPVTH_ADJUST << AW87XXX_PID_C2_LPVTH_BIT)
+#define AW87XXX_PID_C2_LPVTH_THRESHOLD (3)
+#define AW87XXX_PID_C2_CP_REG (0x21)
+#define AW87XXX_PID_C2_VERSION_BITS_LEN (2)
+#define AW87XXX_PID_C2_VERSION_START_BIT (5)
+#define AW87XXX_PID_C2_VERSION_REG (0x2A)
+#define AW87XXX_PID_C2_VERSION_MASK \
+	(~(((1<<AW87XXX_PID_C2_VERSION_BITS_LEN)-1) << AW87XXX_PID_C2_VERSION_START_BIT))
+#define AW87XXX_PID_C2_EFRHH_REG (0x31)
+#define AW87XXX_PID_C2_EF_VERSION_ID_START_BIT (5)
+#define AW87XXX_PID_C2_EF_VERSION_ID_BITS_LEN (2)
+#define AW87XXX_PID_C2_EF_VERSION_ID_MASK \
+	(~(((1<<AW87XXX_PID_C2_EF_VERSION_ID_BITS_LEN)-1) << AW87XXX_PID_C2_EF_VERSION_ID_START_BIT))
+#define AW87XXX_PID_C2_EFRHL_REG (0x32)
+#define AW87XXX_PID_C2_CP_CHECK (0x77)
+#define AW87XXX_PID_C2_CRCOUT0_REG (0x37)
+#define AW87XXX_PID_C2_CRCOUT1_REG (0x38)
+#define AW87XXX_PID_C2_TESTIN1_REG (0x3E)
+#define AW87XXX_PID_C2_TESTIN2_REG (0x3F)
+
+#define AW87XXX_PID_23_POWER_ON_DELAY_MS (0)
+#define AW87XXX_PID_23_POWER_OFF_DELAY_MS (0)
+#define AW87XXX_PID_23_REG_MAX (0x7F)
+#define AW87XXX_PID_23_SYSCTRL_REG (0x02)
+#define AW87XXX_PID_23_EN_SPK_START_BIT (3)
+#define AW87XXX_PID_23_EN_SPK_BITS_LEN (1)
+#define AW87XXX_PID_23_EN_SPK_MASK \
+	(~(((1<<AW87XXX_PID_23_EN_SPK_BITS_LEN)-1) << AW87XXX_PID_23_EN_SPK_START_BIT))
+#define AW87XXX_PID_23_EN_SPK_DISABLE (0)
+#define AW87XXX_PID_23_EN_SPK_DISABLE_VALUE \
+	(AW87XXX_PID_23_EN_SPK_DISABLE << AW87XXX_PID_23_EN_SPK_START_BIT)
+#define AW87XXX_PID_23_EN_SPK_ENABLE (1)
+#define AW87XXX_PID_23_EN_SPK_ENABLE_VALUE \
+	(AW87XXX_PID_23_EN_SPK_ENABLE << AW87XXX_PID_23_EN_SPK_START_BIT)
+#define AW87XXX_PID_23_CP_REG (0x03)
+#define AW87XXX_PID_23_ESD_REG (0x01)
+#define AW87XXX_PID_23_ESD_CHECK (0x00)
 /********************************************
  *
  * aw87xxx devices attributes
@@ -111,6 +426,7 @@ enum aw_dev_chipid {
 	AW_DEV_CHIPID_60 = 0x60,
 	AW_DEV_CHIPID_C1 = 0xC1,
 	AW_DEV_CHIPID_C2 = 0xC2,
+	AW_DEV_CHIPID_23 = 0x23
 };
 
 enum aw_dev_hw_status {
@@ -125,11 +441,6 @@ enum aw_dev_soft_off_enable {
 	AW_DEV_SOFT_OFF_ENABLE = 1,
 };
 
-enum aw_dev_soft_rst_enable {
-	AW_DEV_SOFT_RST_DISENABLE = 0,
-	AW_DEV_SOFT_RST_ENABLE = 1,
-};
-
 enum aw_reg_receiver_mode {
 	AW_NOT_REC_MODE = 0,
 	AW_IS_REC_MODE = 1,
@@ -140,16 +451,66 @@ enum aw_reg_voltage_status {
 	AW_VOLTAGE_HIGH,
 };
 
+struct aw_product_tab {
+	uint8_t count;
+	const char **product_tab;
+};
+
+struct aw_mark_desc {
+	uint8_t addr;
+	uint8_t start;
+	uint8_t mask;
+};
+
+typedef int (*dev_init_func)(struct aw_device *aw_dev);
+
+struct aw_dev_property {
+	uint8_t product_cnt;
+	uint8_t max_addr;
+	uint8_t esd_default;
+	uint8_t sw_enabled;
+	uint8_t ipeak_enabled;
+	uint8_t vol_enabled;
+	uint8_t auth_enabled;
+	uint8_t soft_off_enabled;
+	uint8_t power_on_delay_ms;
+	uint8_t power_off_delay_ms;
+	int id;
+	struct aw_product_tab *product;
+	dev_init_func dev_init_func;
+	struct aw_mark_desc mark_desc;
+	struct aw_device_ops ops;
+};
+
+struct aw_reg_cache {
+    uint8_t start_addr;
+    uint8_t data[127];
+    int count;
+};
+
+struct aw_fld_check_unit {
+	unsigned int reg;
+	unsigned int mask;
+	unsigned int check_val;
+};
+
+struct aw_delay_desc {
+	uint8_t power_on_delay_ms;
+	uint8_t power_off_delay_ms;
+};
+
+struct aw_enable_desc {
+	uint8_t addr;
+	uint8_t enable;
+	uint8_t disable;
+	uint8_t mask;
+};
+
 struct aw_mute_desc {
 	uint8_t addr;
 	uint8_t enable;
 	uint8_t disable;
-	uint16_t mask;
-};
-
-struct aw_soft_rst_desc {
-	int len;
-	unsigned char *access;
+	uint8_t mask;
 };
 
 struct aw_esd_check_desc {
@@ -166,6 +527,8 @@ struct aw_rec_mode_desc {
 
 struct aw_voltage_desc {
 	uint8_t addr;
+	uint8_t mask;
+	uint8_t start;
 	uint8_t vol_max;
 	uint8_t vol_min;
 };
@@ -187,34 +550,65 @@ struct aw_ipeak_desc {
 	unsigned int mask;
 };
 
+struct aw_ef_desc {
+	unsigned int count;
+	struct aw_fld_check_unit sequence[AW_LOCK_SEQUENCE_MAX];
+};
+
+struct dtc_status{
+    int32_t interval_time;
+    int64_t tma_pre;
+    int64_t tcm_pre;
+};
+
+struct aw_dtc_desc {
+	long long last_time;
+	struct dtc_status dtc;
+};
+
+struct aw_cm_volt_desc {
+	uint8_t addr;
+	uint8_t mask;
+	uint8_t init;
+	uint8_t adjust;
+	uint8_t threshold;
+};
+
 struct aw_device {
 	uint8_t i2c_addr;
-	uint8_t chipid;
-	uint8_t soft_rst_enable;
 	uint8_t soft_off_enable;
 	uint8_t is_rec_mode;
+	uint8_t power_on_disabled;
+	uint8_t power_off_disabled;
+	uint8_t version;
+	int chipid;
 	int hwen_status;
 	int i2c_bus;
 	int rst_gpio;
 	int reg_max_addr;
 	int product_cnt;
+	int rst_list_flag;
 	const char **product_tab;
-	const unsigned char *reg_access;
 
 	struct device *dev;
 	struct i2c_client *i2c;
+	struct aw_delay_desc delay_desc;
+	struct aw_enable_desc en_desc;
 	struct aw_mute_desc mute_desc;
-	struct aw_soft_rst_desc soft_rst_desc;
 	struct aw_esd_check_desc esd_desc;
 	struct aw_rec_mode_desc rec_desc;
 	struct aw_voltage_desc vol_desc;
 	struct aw_auth_desc auth_desc;
 	struct aw_ipeak_desc ipeak_desc;
+	struct aw_ef_desc ef_desc;
+	struct aw_dtc_desc dtc_desc;
+	struct aw_cm_volt_desc cm_volt_desc;
+	struct list_head list;
 
 	struct aw_device_ops ops;
 };
 
-
+void aw87xxx_dev_add_dev_list(struct aw_device *aw_dev);
 int aw87xxx_dev_i2c_write_byte(struct aw_device *aw_dev,
 			uint8_t reg_addr, uint8_t reg_data);
 int aw87xxx_dev_i2c_read_byte(struct aw_device *aw_dev,
@@ -233,6 +627,10 @@ int aw87xxx_dev_esd_reg_status_check(struct aw_device *aw_dev);
 int aw87xxx_dev_check_reg_is_rec_mode(struct aw_device *aw_dev);
 int aw87xxx_dev_init(struct aw_device *aw_dev);
 int aw87xxx_dev_algo_auth_mode(struct aw_device *aw_dev, struct algo_auth_data *algo_data);
+#ifdef AW_DTC_ENABLE
+int aw87xxx_dev_backup_dtc(struct aw_device *aw_dev, int dev_index, long long dtc);
+int aw87xxx_dev_sync_dtc(struct aw_device *aw_dev, int dev_index, long long dtc);
+#endif
 #ifdef AW_ALGO_AUTH_DSP
 void aw87xxx_dev_algo_authentication(struct aw_device *aw_dev);
 #endif

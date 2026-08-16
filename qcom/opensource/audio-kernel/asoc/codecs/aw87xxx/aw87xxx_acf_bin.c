@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/* aw87xxx_acf_bin.c
+/*
+ * aw87xxx_acf_bin.c
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -9,8 +10,8 @@
  * under  the terms of  the GNU General  Public License as published by the
  * Free Software Foundation;  either version 2 of the  License, or (at your
  * option) any later version.
+ *
  */
-
 #include <linux/module.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
@@ -18,6 +19,7 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/firmware.h>
 #include <linux/kernel.h>
 #include <linux/vmalloc.h>
 #include "aw87xxx.h"
@@ -149,9 +151,6 @@ static int aw_check_header_size(struct device *dev,
 static int aw_check_ddt_size_v_0_0_0_1(struct device *dev, char *fw_data)
 {
 	struct aw_acf_hdr *acf_hdr = (struct aw_acf_hdr *)fw_data;
-	struct aw_acf_dde *acf_dde = NULL;
-
-	acf_dde = (struct aw_acf_dde *)(fw_data + acf_hdr->ddt_offset);
 
 	/* check ddt_size in acf_header is aqual to ddt_num multiply by dde_size */
 	if (acf_hdr->ddt_size != acf_hdr->dde_num * sizeof(struct aw_acf_dde)) {
@@ -174,11 +173,6 @@ static int aw_check_data_size_v_0_0_0_1(struct device *dev,
 	acf_dde = (struct aw_acf_dde *)(fw_data + acf_hdr->ddt_offset);
 
 	for (i = 0; i < acf_hdr->dde_num; ++i) {
-		if (acf_dde[i].data_size % 2) {
-			AW_DEV_LOGE(dev, "acf dde[%d].data_size[%d],dev_name[%s],data_type[%d], data_size check failed",
-				i, acf_dde[i].data_size, acf_dde[i].dev_name,
-				acf_dde[i].data_type);
-		}
 		data_size += acf_dde[i].data_size;
 	}
 
@@ -280,9 +274,6 @@ static int aw_check_data_v_0_0_0_1(struct device *dev,
 static int aw_check_ddt_size_v_1_0_0_0(struct device *dev, char *fw_data)
 {
 	struct aw_acf_hdr *acf_hdr = (struct aw_acf_hdr *)fw_data;
-	struct aw_acf_dde_v_1_0_0_0 *acf_dde = NULL;
-
-	acf_dde = (struct aw_acf_dde_v_1_0_0_0 *)(fw_data + acf_hdr->ddt_offset);
 
 	/* check ddt_size in acf_header is aqual to ddt_num multiply by dde_size */
 	if (acf_hdr->ddt_size != acf_hdr->dde_num * sizeof(struct aw_acf_dde_v_1_0_0_0)) {
@@ -309,7 +300,6 @@ static int aw_check_data_size_v_1_0_0_0(struct device *dev,
 			AW_DEV_LOGE(dev, "acf dde[%d].data_size[%d],dev_name[%s],data_type[%d], data_size check failed",
 				i, acf_dde[i].data_size, acf_dde[i].dev_name,
 				acf_dde[i].data_type);
-			return -EINVAL;
 		}
 		data_size += acf_dde[i].data_size;
 	}
@@ -1472,6 +1462,78 @@ void aw87xxx_acf_profile_free(struct device *dev, struct acf_bin_info *acf_info)
 		vfree(acf_info->fw_data);
 		acf_info->fw_data = NULL;
 	}
+}
+
+int aw_parse_single_bin(struct device *dev, struct acf_bin_info *acf_info,
+			struct aw_data_container aw_fw_data, int prof_index)
+{
+	struct aw_prof_info *prof_info = &acf_info->prof_info;
+	unsigned int header_version = 0;
+	struct aw_bin *aw_bin = NULL;
+	int i, ret;
+
+	AW_DEV_LOGD(dev, "enter");
+
+	aw_bin = kzalloc(aw_fw_data.len + sizeof(struct aw_bin), GFP_KERNEL);
+	if (!aw_bin) {
+		AW_DEV_LOGE(dev, "%s: kzalloc aw_bin failed", __func__);
+		return -ENOMEM;
+	}
+
+	aw_bin->info.len = aw_fw_data.len ;
+	memcpy(aw_bin->info.data, aw_fw_data.data , aw_fw_data.len);
+
+	header_version = GET_32_DATA(*(aw_bin->info.data + 7),
+				*(aw_bin->info.data + 6),
+				*(aw_bin->info.data + 5), *(aw_bin->info.data+ 4));
+	AW_DEV_LOGD(dev, "header_version = 0x%x", header_version);
+
+	/* bin type is AW_BIN_TYPE_REG */
+	if (header_version != HEADER_VERSION_1_0_0) {
+		AW_DEV_LOGI(dev, "bin data type is raw");
+		prof_info->prof_desc[prof_index].data_container.data = aw_bin->info.data;
+		prof_info->prof_desc[prof_index].data_container.len = aw_bin->info.len;
+		prof_info->prof_desc[prof_index].prof_st = AW_PROFILE_OK;
+		return 0;
+	}
+
+	/* bin type is AW_BIN_TYPE_HDR_REG or  AW_BIN_TYPE_MUTLBIN*/
+	ret = aw87xxx_parsing_bin_file(aw_bin);
+	if (ret < 0) {
+		AW_DEV_LOGE(dev, "parse bin failed");
+		goto parse_bin_failed;
+	}
+
+	for (i = 0; i < aw_bin->all_bin_parse_num; i++) {
+		if (aw_bin->header_info[i].bin_data_type == DATA_TYPE_REGISTER) {
+			prof_info->prof_desc[prof_index].data_container.len = aw_bin->header_info[i].valid_data_len;
+			prof_info->prof_desc[prof_index].data_container.data =
+						aw_fw_data.data + aw_bin->header_info[i].valid_data_addr;
+			break;
+		}
+	}
+
+	if (i == aw_bin->all_bin_parse_num) {
+		AW_DEV_LOGE(dev, "the expected data type was not found,pls check");
+		ret = -EINVAL;
+		goto parse_bin_failed;
+	}
+
+	prof_info->prof_desc[prof_index].prof_st = AW_PROFILE_OK;
+
+	kfree(aw_bin);
+	aw_bin = NULL;
+	AW_DEV_LOGD(dev, "%s done\n", __func__);
+
+	acf_info->prof_info.status = AW_ACF_UPDATE;
+
+	return 0;
+
+parse_bin_failed:
+	kfree(aw_bin);
+	aw_bin = NULL;
+
+	return ret;
 }
 
 int aw87xxx_acf_parse(struct device *dev, struct acf_bin_info *acf_info)

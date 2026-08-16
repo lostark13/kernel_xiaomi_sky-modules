@@ -1,8 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0
- *
+// SPDX-License-Identifier: GPL-2.0
+/*
  * aw87xxx_acf_bin.h  aw87xxx pa module
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -12,7 +12,6 @@
  * option) any later version.
  *
  */
-
 #ifndef __AW87XXX_ACF_BIN_H__
 #define __AW87XXX_ACF_BIN_H__
 
@@ -32,6 +31,7 @@
 #define AW_ACF_FILE_ID			(0xa15f908)
 #define AW_PROFILE_STR_MAX		(32)
 #define AW_POWER_OFF_NAME_SUPPORT_COUNT	(5)
+#define AW_PARSE_UI_BIN_COUNT 		(2)
 
 enum aw_cfg_hdr_version {
 	AW_ACF_HDR_VER_0_0_0_1 = 0x00000001,
@@ -91,6 +91,9 @@ enum aw_bin_dev_profile_id {
 	AW_PROFILE_OFF,
 	AW_PROFILE_MAX,
 };
+
+#define FW_NAME_MAX 64
+#define FW_MIN_SIZE 10
 
 struct aw_acf_hdr {
 	int32_t a_id;				/* acf file ID 0xa15f908 */
@@ -201,6 +204,6 @@ int aw87xxx_acf_get_profile_count(struct device *dev,
 char *aw87xxx_acf_get_prof_off_name(struct device *dev,
 			struct acf_bin_info *acf_info);
 void aw87xxx_acf_init(struct aw_device *aw_dev, struct acf_bin_info *acf_info, int index);
-
-
+int aw_parse_single_bin(struct device *dev, struct acf_bin_info *acf_info,
+			struct aw_data_container aw_fw_data, int prof_index);
 #endif

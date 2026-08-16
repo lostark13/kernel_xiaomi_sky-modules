@@ -1,8 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0
- *
+// SPDX-License-Identifier: GPL-2.0
+/*
  * aw87xxx.h  aw87xxx pa module
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -12,7 +12,6 @@
  * option) any later version.
  *
  */
-
 #ifndef __AW87XXX_H__
 #define __AW87XXX_H__
 #include <linux/version.h>
@@ -30,7 +29,7 @@
 #define AW87XXX_NO_OFF_BIN		(0)
 #define AW87XXX_OFF_BIN_OK		(1)
 
-#define AW87XXX_PRIVATE_KCONTROL_NUM	(3)
+#define AW87XXX_PRIVATE_KCONTROL_NUM	(4)
 #define AW87XXX_PUBLIC_KCONTROL_NUM	(3)
 
 #define AW_I2C_RETRIES			(5)
@@ -61,6 +60,10 @@
 #define AW_KERNEL_VER_OVER_5_4_0
 #endif
 
+#if KERNEL_VERSION(5, 0, 0) <= LINUX_VERSION_CODE
+#define AW_KERNEL_VER_OVER_5_0_0
+#endif
+
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 #define AW_KERNEL_VER_OVER_5_10_0
 #endif
@@ -68,6 +71,9 @@
 #define AW_KERNEL_VER_OVER_6_1_0
 #endif
 
+#if KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE
+#define AW_KERNEL_VER_OVER_6_6_0
+#endif
 
 #ifdef AW_KERNEL_VER_OVER_4_19_1
 typedef struct snd_soc_component aw_snd_soc_codec_t;
@@ -114,6 +120,10 @@ struct aw_i2c_packet {
 	char *reg_data;
 };
 
+enum {
+	bin_type_acf,
+	bin_type_single,
+};
 
 /********************************************
  *
@@ -128,6 +138,10 @@ struct aw87xxx {
 	uint32_t off_bin_status;
 	struct device *dev;
 	bool is_suspend;
+
+	int bin_type;
+	int support_prof_count;
+	char **support_prof;
 
 	struct mutex reg_lock;
 	struct aw_device aw_dev;

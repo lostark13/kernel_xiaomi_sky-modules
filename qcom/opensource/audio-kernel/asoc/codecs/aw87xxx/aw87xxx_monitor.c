@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/* aw87xxx_monitor.c
+/*
+ * aw87xxx_monitor.c
  *
- * Copyright (c) 2021 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -9,6 +10,7 @@
  * under  the terms of  the GNU General  Public License as published by the
  * Free Software Foundation;  either version 2 of the  License, or (at your
  * option) any later version.
+ *
  */
 #include <linux/module.h>
 #include <linux/uaccess.h>
@@ -783,6 +785,7 @@ static int aw_monitor_get_sys_voltage(struct device *dev, int *value)
 	if (ret < 0)
 		return ret;
 
+	/* Taking the APQ8096/Mtk6765/SPRD platform as an example in the code, the returned voltage unit is um */
 	*value = voltage / 1000;
 
 	AW_DEV_LOGI(dev, "sys voltage: %d", *value);
@@ -1236,6 +1239,40 @@ static void aw_monitor_get_cfg(struct device *dev,
 	}
 }
 
+static void aw_monitor_set_cm_volt(struct device *dev)
+{
+	struct aw87xxx *aw87xxx = dev_get_drvdata(dev);
+	struct aw_monitor *monitor = &aw87xxx->monitor;
+	struct aw_monitor_trace *vol_trace = &monitor->vol_trace;
+	struct aw_cm_volt_desc *desc = &aw87xxx->aw_dev.cm_volt_desc;
+	uint8_t reg_val = 0;
+	uint8_t set_val = 0;
+	int ret = -1;
+
+	if (desc->addr == AW_REG_NONE) {
+		return;
+	}
+
+	set_val = vol_trace->sum_val < desc->threshold ? desc->adjust : desc->init;
+
+	ret = aw87xxx_dev_i2c_read_byte(&aw87xxx->aw_dev, desc->addr, &reg_val);
+	if (ret < 0) {
+		AW_DEV_LOGE(dev, "read cm volt failed");
+		return;
+	}
+
+	if ((reg_val & (~desc->mask)) == set_val)
+		return;
+
+	reg_val &= desc->mask;
+	reg_val |= set_val;
+	ret = aw87xxx_dev_i2c_write_byte(&aw87xxx->aw_dev, desc->addr, reg_val);
+	if (ret < 0) {
+		AW_DEV_LOGE(dev, "write cm volt failed");
+		return;
+	}
+}
+
 static void aw_monitor_set_ipeak(struct device *dev,
 				uint16_t ipeak)
 {
@@ -1313,6 +1350,7 @@ static void aw_monitor_with_dsp_work(struct device *dev)
 		(monitor->first_entry == AW_NOT_FIRST_ENTRY))
 		return;
 
+
 	ret = aw_monitor_get_data(dev);
 	if (ret < 0)
 		return;
@@ -1322,6 +1360,8 @@ static void aw_monitor_with_dsp_work(struct device *dev)
 	AW_DEV_LOGD(dev,
 		"set_ipeak = 0x%x, set_gain = 0x%x, set_vmax = 0x%x",
 		set_table.ipeak, set_table.gain, set_table.vmax);
+
+	aw_monitor_set_cm_volt(dev);
 
 	aw_monitor_set_ipeak(dev, set_table.ipeak);
 
@@ -1441,8 +1481,7 @@ void aw87xxx_monitor_start(struct aw_monitor *monitor)
 		monitor->vbat_sum = 0;
 		monitor->esd_err_cnt = 0;
 
-		schedule_delayed_work(&monitor->with_dsp_work,
-				msecs_to_jiffies(monitor_time));
+		schedule_delayed_work(&monitor->with_dsp_work, 0);
 	}
 }
 /***************************************************************************
@@ -2216,4 +2255,3 @@ void aw87xxx_monitor_exit(struct aw_monitor *monitor)
 				&aw_monitor_control_group);
 	}
 }
-

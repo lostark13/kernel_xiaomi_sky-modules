@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/* aw87xxx_bin_parse.c
+/*
+ * aw87xxx_bin_parse.c
  *
- * Copyright (c) 2020 AWINIC Technology CO., LTD
+ * Copyright (c) 2024 AWINIC Technology CO., LTD
  *
  * Author: Barry <zhaozhongbo@awinic.com>
  *
@@ -9,8 +10,8 @@
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation; either version 2 of the License, or (at your
  * option) any later version.
+ *
  */
-
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/i2c.h>
